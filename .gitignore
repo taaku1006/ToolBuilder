@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Environment
+.env
+*.env.local
+
+# Runtime directories
+backend/uploads/*
+backend/outputs/*
+backend/tools/*
+backend/skills/*
+backend/db/*.db
+!backend/uploads/.gitkeep
+!backend/outputs/.gitkeep
+!backend/tools/.gitkeep
+!backend/skills/.gitkeep
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+*:Zone.Identifier
