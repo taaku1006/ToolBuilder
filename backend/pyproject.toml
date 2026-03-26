@@ -21,7 +21,13 @@ dependencies = [
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.25",
+    "pytest-cov>=6.0",
     "httpx>=0.28",
     "black>=24.0",
     "ruff>=0.9",
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+asyncio_mode = "auto"
