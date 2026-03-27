@@ -19,13 +19,35 @@ class Base(DeclarativeBase):
     """Declarative base for all ORM models."""
 
 
+def _set_sqlite_pragmas(dbapi_conn, _connection_record) -> None:  # noqa: ANN001
+    """Set SQLite pragmas on each new connection.
+
+    - WAL mode: readers never block writers, writers never block readers
+    - foreign_keys: enforce FK constraints (SQLite disables them by default)
+    - synchronous=NORMAL: safe with WAL, faster than FULL
+    """
+    cursor = dbapi_conn.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.execute("PRAGMA synchronous=NORMAL")
+    cursor.close()
+
+
 def _make_engine(database_url: str):
     """Create an async engine from the given URL."""
-    return create_async_engine(
+    from sqlalchemy import event
+
+    engine = create_async_engine(
         database_url,
         echo=False,
         future=True,
     )
+
+    # Apply SQLite pragmas on every raw connection
+    if "sqlite" in database_url:
+        event.listen(engine.sync_engine, "connect", _set_sqlite_pragmas)
+
+    return engine
 
 
 def _make_session_factory(engine) -> async_sessionmaker[AsyncSession]:
