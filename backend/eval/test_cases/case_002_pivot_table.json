@@ -1,0 +1,6 @@
+{
+  "id": "case_002",
+  "task": "月別・カテゴリ別のクロス集計表（ピボットテーブル）を作成してください",
+  "description": "Pivot table: month x category cross-tabulation",
+  "expected_success": true
+}

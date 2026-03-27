@@ -8,6 +8,7 @@ import { AgentLog } from './components/AgentLog'
 import { DebugLog } from './components/DebugLog'
 import { CodeResult } from './components/CodeResult'
 import { ToolDashboard } from './components/ToolDashboard'
+import { EvalDashboard } from './components/EvalDashboard'
 import { useGenerateStore } from './stores/useGenerateStore'
 import { useFileStore } from './stores/useFileStore'
 
@@ -56,15 +57,17 @@ function BuilderPage() {
 }
 
 function App() {
-  const [page, setPage] = useState<'builder' | 'dashboard'>('builder')
+  const [page, setPage] = useState<'builder' | 'dashboard' | 'eval'>('builder')
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
       <Header page={page} onNavigate={setPage} />
       {page === 'builder' ? (
         <BuilderPage />
-      ) : (
+      ) : page === 'dashboard' ? (
         <ToolDashboard onBack={() => setPage('builder')} />
+      ) : (
+        <EvalDashboard />
       )}
     </div>
   )

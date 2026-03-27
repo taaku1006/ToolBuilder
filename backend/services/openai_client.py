@@ -23,6 +23,10 @@ class OpenAIClient:
     def __init__(self, settings: Settings) -> None:
         self._client = OpenAI(api_key=settings.openai_api_key)
         self._model = settings.openai_model
+        self.total_tokens: int = 0
+        self.prompt_tokens: int = 0
+        self.completion_tokens: int = 0
+        self.api_calls: int = 0
 
     def generate_code(self, system_prompt: str, user_prompt: str) -> str:
         logger.info(
@@ -53,10 +57,14 @@ class OpenAIClient:
             "model": self._model,
             "duration_ms": duration_ms,
         }
+        self.api_calls += 1
         if usage is not None:
             extra["prompt_tokens"] = usage.prompt_tokens
             extra["completion_tokens"] = usage.completion_tokens
             extra["total_tokens"] = usage.total_tokens
+            self.total_tokens += usage.total_tokens
+            self.prompt_tokens += usage.prompt_tokens
+            self.completion_tokens += usage.completion_tokens
 
         logger.info("OpenAI API call completed", extra=extra)
 

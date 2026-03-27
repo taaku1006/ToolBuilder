@@ -1,0 +1,7 @@
+{
+  "id": "v1_baseline",
+  "phases": ["A", "B", "C", "D", "E"],
+  "model": "gpt-4o",
+  "debug_retry_limit": 3,
+  "description": "Full pipeline baseline"
+}

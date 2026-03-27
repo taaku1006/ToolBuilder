@@ -277,6 +277,10 @@ async def orchestrate(
             "steps": phase_c.steps,
             "tips": phase_c.tips,
             "debug_retries": debug_retries,
+            "total_tokens": int(openai_client.total_tokens) if isinstance(openai_client.total_tokens, int) else 0,
+            "prompt_tokens": int(openai_client.prompt_tokens) if isinstance(openai_client.prompt_tokens, int) else 0,
+            "completion_tokens": int(openai_client.completion_tokens) if isinstance(openai_client.completion_tokens, int) else 0,
+            "api_calls": int(openai_client.api_calls) if isinstance(openai_client.api_calls, int) else 0,
         },
         ensure_ascii=False,
     )

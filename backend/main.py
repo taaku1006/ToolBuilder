@@ -16,7 +16,7 @@ from core.deps import get_settings
 from core.exceptions import AppError, app_error_handler
 from core.logging import setup_logging
 from db.engine import create_tables, init_engine
-from routers import execute, generate, history, skills, upload
+from routers import eval, execute, generate, history, skills, upload
 
 logger = logging.getLogger(__name__)
 
@@ -114,3 +114,4 @@ app.include_router(upload.router, prefix="/api")
 app.include_router(execute.router, prefix="/api")
 app.include_router(history.router, prefix="/api")
 app.include_router(skills.router, prefix="/api")
+app.include_router(eval.router, prefix="/api")

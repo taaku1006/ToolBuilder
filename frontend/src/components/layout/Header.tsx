@@ -1,6 +1,6 @@
 interface HeaderProps {
-  page: 'builder' | 'dashboard'
-  onNavigate: (page: 'builder' | 'dashboard') => void
+  page: 'builder' | 'dashboard' | 'eval'
+  onNavigate: (page: 'builder' | 'dashboard' | 'eval') => void
 }
 
 export function Header({ page, onNavigate }: HeaderProps) {
@@ -32,6 +32,16 @@ export function Header({ page, onNavigate }: HeaderProps) {
             }`}
           >
             ダッシュボード
+          </button>
+          <button
+            onClick={() => onNavigate('eval')}
+            className={`px-4 py-1.5 text-sm rounded-md transition-colors ${
+              page === 'eval'
+                ? 'bg-gray-700 text-white font-medium'
+                : 'text-gray-400 hover:text-gray-200'
+            }`}
+          >
+            Eval
           </button>
         </nav>
       </div>

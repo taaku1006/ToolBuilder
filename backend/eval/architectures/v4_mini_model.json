@@ -1,0 +1,7 @@
+{
+  "id": "v4_mini_model",
+  "phases": ["A", "B", "C", "D", "E"],
+  "model": "gpt-4o-mini",
+  "debug_retry_limit": 3,
+  "description": "Full pipeline with cheaper model"
+}
