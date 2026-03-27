@@ -72,7 +72,23 @@ describe('useGenerateStore', () => {
       await result.current.generate()
     })
 
-    expect(generateApi.postGenerate).toHaveBeenCalledWith('Excelを処理して')
+    expect(generateApi.postGenerate).toHaveBeenCalledWith('Excelを処理して', undefined)
+  })
+
+  it('generate calls postGenerate with fileId when provided', async () => {
+    vi.mocked(generateApi.postGenerate).mockResolvedValueOnce(mockResponse)
+
+    const { result } = renderHook(() => useGenerateStore())
+
+    act(() => {
+      result.current.setTask('ファイルを処理して')
+    })
+
+    await act(async () => {
+      await result.current.generate('file-id-123')
+    })
+
+    expect(generateApi.postGenerate).toHaveBeenCalledWith('ファイルを処理して', 'file-id-123')
   })
 
   it('generate sets error on API failure', async () => {

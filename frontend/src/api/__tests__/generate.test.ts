@@ -30,6 +30,26 @@ describe('postGenerate', () => {
     expect(client.post).toHaveBeenCalledWith('/generate', { task: 'Excelを集計して' })
   })
 
+  it('includes file_id in the body when provided', async () => {
+    vi.mocked(client.post).mockResolvedValueOnce({ data: mockResponse })
+
+    await postGenerate('Excelを集計して', 'file-abc-123')
+
+    expect(client.post).toHaveBeenCalledWith('/generate', {
+      task: 'Excelを集計して',
+      file_id: 'file-abc-123',
+    })
+  })
+
+  it('omits file_id from the body when not provided', async () => {
+    vi.mocked(client.post).mockResolvedValueOnce({ data: mockResponse })
+
+    await postGenerate('Excelを集計して')
+
+    const body = vi.mocked(client.post).mock.calls[0][1] as Record<string, unknown>
+    expect(body).not.toHaveProperty('file_id')
+  })
+
   it('returns the GenerateResponse from the API', async () => {
     vi.mocked(client.post).mockResolvedValueOnce({ data: mockResponse })
 

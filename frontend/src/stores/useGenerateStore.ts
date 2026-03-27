@@ -8,7 +8,7 @@ interface GenerateState {
   loading: boolean
   error: string | null
   setTask: (task: string) => void
-  generate: () => Promise<void>
+  generate: (fileId?: string) => Promise<void>
   reset: () => void
 }
 
@@ -24,14 +24,14 @@ export const useGenerateStore = create<GenerateState>((set, get) => ({
 
   setTask: (task) => set({ task }),
 
-  generate: async () => {
+  generate: async (fileId?: string) => {
     const { task } = get()
     if (!task.trim()) return
 
     set({ loading: true, error: null })
 
     try {
-      const response = await postGenerate(task)
+      const response = await postGenerate(task, fileId)
       set({ response, loading: false })
     } catch {
       set({

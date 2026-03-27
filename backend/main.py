@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from core.deps import get_settings
 from core.exceptions import AppError, app_error_handler
-from routers import generate
+from routers import generate, upload
 
 settings = get_settings()
 
@@ -35,3 +35,4 @@ app.add_exception_handler(AppError, app_error_handler)  # type: ignore[arg-type]
 # Routers
 # ---------------------------------------------------------------------------
 app.include_router(generate.router, prefix="/api")
+app.include_router(upload.router, prefix="/api")

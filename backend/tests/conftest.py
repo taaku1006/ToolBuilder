@@ -1,12 +1,23 @@
 """Pytest fixtures for backend tests."""
 
+from __future__ import annotations
+
+import csv
+import datetime
 from collections.abc import Generator
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import openpyxl
 import pytest
 from fastapi.testclient import TestClient
 
 from core.config import Settings
+
+
+# ---------------------------------------------------------------------------
+# Settings / OpenAI mocks
+# ---------------------------------------------------------------------------
 
 
 @pytest.fixture
@@ -75,6 +86,160 @@ def test_client(
     from main import app
 
     app.dependency_overrides[get_settings] = lambda: mock_settings
+
+    with TestClient(app) as client:
+        yield client
+
+    app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
+# File fixtures — xlsx / csv
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def sample_xlsx(tmp_path: Path) -> Path:
+    """Create a real xlsx file with known data for parser tests.
+
+    Sheet name: Sales
+    Columns: date (datetime), product (str), quantity (int), price (float), active (bool)
+    Data rows: 5
+    """
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Sales"
+
+    ws.append(["date", "product", "quantity", "price", "active"])
+
+    rows = [
+        [datetime.date(2024, 1, 1), "Widget A", 10, 9.99, True],
+        [datetime.date(2024, 1, 2), "Widget B", 5, 19.99, False],
+        [datetime.date(2024, 1, 3), "Gadget X", 20, 4.50, True],
+        [datetime.date(2024, 1, 4), "Gadget Y", 2, 99.00, True],
+        [datetime.date(2024, 1, 5), "Widget A", 8, 9.99, False],
+    ]
+    for row in rows:
+        ws.append(row)
+
+    path = tmp_path / "sample.xlsx"
+    wb.save(str(path))
+    return path
+
+
+@pytest.fixture
+def large_xlsx(tmp_path: Path) -> Path:
+    """Create an xlsx with 50 data rows to test the 30-row preview cap."""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "BigSheet"
+
+    ws.append(["id", "value"])
+    for i in range(1, 51):
+        ws.append([i, i * 10])
+
+    path = tmp_path / "large.xlsx"
+    wb.save(str(path))
+    return path
+
+
+@pytest.fixture
+def multi_sheet_xlsx(tmp_path: Path) -> Path:
+    """Create an xlsx with two sheets: Sheet1 and Sheet2."""
+    wb = openpyxl.Workbook()
+
+    ws1 = wb.active
+    ws1.title = "Sheet1"
+    ws1.append(["a", "b"])
+    ws1.append([1, 2])
+
+    ws2 = wb.create_sheet("Sheet2")
+    ws2.append(["x", "y"])
+    ws2.append([10, 20])
+
+    path = tmp_path / "multi.xlsx"
+    wb.save(str(path))
+    return path
+
+
+@pytest.fixture
+def empty_xlsx(tmp_path: Path) -> Path:
+    """Create an xlsx with a sheet that has no data rows (only header or nothing)."""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Empty"
+    # No rows at all — completely empty sheet
+
+    path = tmp_path / "empty.xlsx"
+    wb.save(str(path))
+    return path
+
+
+@pytest.fixture
+def xlsx_with_nulls(tmp_path: Path) -> Path:
+    """Create an xlsx where some cells are None/empty."""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Nulls"
+
+    ws.append(["col_a", "col_b", "col_c"])
+    ws.append([1, None, "hello"])
+    ws.append([None, 2, None])
+    ws.append([3, 4, "world"])
+
+    path = tmp_path / "nulls.xlsx"
+    wb.save(str(path))
+    return path
+
+
+@pytest.fixture
+def sample_csv(tmp_path: Path) -> Path:
+    """Create a real csv file with 3 data rows."""
+    path = tmp_path / "sample.csv"
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["id", "name", "value"])
+        writer.writerow([1, "Alice", 100])
+        writer.writerow([2, "Bob", 200])
+        writer.writerow([3, "Charlie", 300])
+    return path
+
+
+# ---------------------------------------------------------------------------
+# Upload dir fixture
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def tmp_upload_dir(tmp_path: Path) -> Path:
+    """Return a temporary directory used as the upload destination."""
+    d = tmp_path / "uploads"
+    d.mkdir()
+    return d
+
+
+# ---------------------------------------------------------------------------
+# Upload test client
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def upload_client(
+    tmp_upload_dir: Path,
+    mock_openai_client: MagicMock,
+) -> Generator[TestClient, None, None]:
+    """Return a TestClient wired to use tmp_upload_dir and mocked OpenAI."""
+    upload_settings = Settings(
+        openai_api_key="test-api-key-12345",
+        openai_model="gpt-4o",
+        cors_origins="http://localhost:5173",
+        upload_dir=str(tmp_upload_dir),
+    )
+
+    from core.deps import get_settings
+    from main import app
+
+    app.dependency_overrides[get_settings] = lambda: upload_settings
 
     with TestClient(app) as client:
         yield client

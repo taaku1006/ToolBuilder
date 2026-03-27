@@ -52,6 +52,24 @@ describe('TaskInput', () => {
     expect(mockGenerate).toHaveBeenCalledTimes(1)
   })
 
+  it('calls generate with undefined fileId when no fileId prop is given', async () => {
+    const user = userEvent.setup()
+    render(<TaskInput />)
+
+    await user.click(screen.getByRole('button', { name: /生成/ }))
+
+    expect(mockGenerate).toHaveBeenCalledWith(undefined)
+  })
+
+  it('calls generate with fileId when fileId prop is provided', async () => {
+    const user = userEvent.setup()
+    render(<TaskInput fileId="file-abc-123" />)
+
+    await user.click(screen.getByRole('button', { name: /生成/ }))
+
+    expect(mockGenerate).toHaveBeenCalledWith('file-abc-123')
+  })
+
   it('calls generate when Cmd+Enter is pressed in textarea', async () => {
     const user = userEvent.setup()
     render(<TaskInput />)
