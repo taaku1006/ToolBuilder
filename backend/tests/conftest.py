@@ -10,9 +10,12 @@ from unittest.mock import MagicMock, patch
 
 import openpyxl
 import pytest
+import pytest_asyncio
 from fastapi.testclient import TestClient
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from core.config import Settings
+from db.engine import Base, get_db
 
 
 # ---------------------------------------------------------------------------
@@ -223,12 +226,38 @@ def tmp_upload_dir(tmp_path: Path) -> Path:
 # ---------------------------------------------------------------------------
 
 
+_TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
+
+
+@pytest_asyncio.fixture
+async def _shared_test_engine():
+    """In-memory SQLite engine shared across upload + skills tests."""
+    engine = create_async_engine(_TEST_DB_URL, echo=False)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield engine
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+    await engine.dispose()
+
+
+@pytest_asyncio.fixture
+async def _shared_session_factory(_shared_test_engine):
+    """Session factory for the shared in-memory engine."""
+    return async_sessionmaker(
+        bind=_shared_test_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+
+
 @pytest.fixture
 def upload_client(
     tmp_upload_dir: Path,
     mock_openai_client: MagicMock,
+    _shared_session_factory,
 ) -> Generator[TestClient, None, None]:
-    """Return a TestClient wired to use tmp_upload_dir and mocked OpenAI."""
+    """Return a TestClient wired to use tmp_upload_dir, mocked OpenAI, and in-memory DB."""
     upload_settings = Settings(
         openai_api_key="test-api-key-12345",
         openai_model="gpt-4o",
@@ -239,7 +268,12 @@ def upload_client(
     from core.deps import get_settings
     from main import app
 
+    async def override_get_db():
+        async with _shared_session_factory() as session:
+            yield session
+
     app.dependency_overrides[get_settings] = lambda: upload_settings
+    app.dependency_overrides[get_db] = override_get_db
 
     with TestClient(app) as client:
         yield client

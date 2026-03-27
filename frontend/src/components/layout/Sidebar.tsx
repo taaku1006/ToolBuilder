@@ -39,7 +39,7 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="w-72 bg-gray-900 border-r border-gray-800 flex flex-col h-full">
+    <div className="flex flex-col">
       <div className="px-4 py-4 border-b border-gray-800">
         <h2 className="text-sm font-semibold text-gray-300 mb-3">履歴</h2>
         <input
@@ -51,7 +51,7 @@ export function Sidebar() {
         />
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="overflow-y-auto">
         {loading && (
           <div className="px-4 py-6 text-center text-sm text-gray-500">読み込み中...</div>
         )}
@@ -100,6 +100,6 @@ export function Sidebar() {
           </ul>
         )}
       </div>
-    </aside>
+    </div>
   )
 }

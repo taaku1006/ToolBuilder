@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from core.deps import get_settings
 from core.exceptions import AppError, app_error_handler
 from db.engine import create_tables, init_engine
-from routers import execute, generate, history, upload
+from routers import execute, generate, history, skills, upload
 
 settings = get_settings()
 
@@ -54,3 +54,4 @@ app.include_router(generate.router, prefix="/api")
 app.include_router(upload.router, prefix="/api")
 app.include_router(execute.router, prefix="/api")
 app.include_router(history.router, prefix="/api")
+app.include_router(skills.router, prefix="/api")

@@ -247,6 +247,11 @@ async def orchestrate(
                     timestamp=_now_iso(),
                 )
 
+    # Determine overall execution success for Phase E suggestion
+    exec_succeeded = not settings.debug_loop_enabled or (
+        settings.debug_loop_enabled and debug_retries < settings.debug_retry_limit
+    )
+
     result_payload = json.dumps(
         {
             "python_code": python_code,
@@ -264,3 +269,41 @@ async def orchestrate(
         content=result_payload,
         timestamp=_now_iso(),
     )
+
+    # ------------------------------------------------------------------
+    # Phase E — skill save suggestion
+    # ------------------------------------------------------------------
+    if settings.skills_enabled:
+        yield AgentLogEntry(
+            phase="E",
+            action="start",
+            content="Phase E: スキル保存の提案を確認します",
+            timestamp=_now_iso(),
+        )
+
+        if exec_succeeded:
+            suggestion_payload = json.dumps(
+                {
+                    "suggest_save": True,
+                    "python_code": python_code,
+                    "task_summary": phase_c.summary or task,
+                    "message": "実行が成功しました。このコードをスキルとして保存することをお勧めします。",
+                },
+                ensure_ascii=False,
+            )
+            yield AgentLogEntry(
+                phase="E",
+                action="complete",
+                content=suggestion_payload,
+                timestamp=_now_iso(),
+            )
+        else:
+            yield AgentLogEntry(
+                phase="E",
+                action="complete",
+                content=json.dumps(
+                    {"suggest_save": False, "message": "実行が失敗したためスキル保存は提案しません。"},
+                    ensure_ascii=False,
+                ),
+                timestamp=_now_iso(),
+            )

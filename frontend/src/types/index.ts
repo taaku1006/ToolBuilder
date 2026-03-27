@@ -39,6 +39,31 @@ export interface UploadResponse {
   file_id: string
   filename: string
   sheets: SheetInfo[]
+  suggested_skills?: SkillSuggestion[]
+}
+
+export interface SkillItem {
+  id: string
+  created_at: string
+  title: string
+  tags: string[]
+  python_code: string
+  file_schema: string | null
+  task_summary: string | null
+  use_count: number
+  success_rate: number
+}
+
+export interface SkillSuggestion {
+  id: string
+  title: string
+  tags: string[]
+  similarity: number
+}
+
+export interface SkillsListResponse {
+  items: SkillItem[]
+  total: number
 }
 
 export interface ExecuteRequest {

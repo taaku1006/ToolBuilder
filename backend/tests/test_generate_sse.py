@@ -352,9 +352,15 @@ class TestGenerateSseMode:
             if line.startswith("data: ")
         ]
 
-        last = json.loads(data_lines[-1])
-        assert "python_code" in last
-        assert last["python_code"] == expected_code
+        # Find the C/complete event which has python_code merged at top level
+        c_complete = None
+        for line in data_lines:
+            parsed = json.loads(line)
+            if parsed.get("phase") == "C" and parsed.get("action") == "complete":
+                c_complete = parsed
+                break
+        assert c_complete is not None, "No C/complete SSE event found"
+        assert c_complete["python_code"] == expected_code
 
     def test_sse_events_have_phase_field(self) -> None:
         """Each SSE data event must have a phase field."""

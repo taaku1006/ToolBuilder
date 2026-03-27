@@ -2,6 +2,8 @@
 
 from pydantic import BaseModel
 
+from schemas.skills import SkillSuggestion
+
 
 class SheetInfoSchema(BaseModel):
     """Serialisable representation of a parsed sheet."""
@@ -19,3 +21,4 @@ class UploadResponse(BaseModel):
     file_id: str
     filename: str
     sheets: list[SheetInfoSchema]
+    suggested_skills: list[SkillSuggestion] = []

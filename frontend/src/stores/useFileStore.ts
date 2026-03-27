@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { uploadFile } from '../api/upload'
 import type { UploadResponse } from '../types'
+import { useSkillsStore } from './useSkillsStore'
 
 interface FileState {
   file: File | null
@@ -30,6 +31,9 @@ export const useFileStore = create<FileState>((set) => ({
     try {
       const uploadResponse = await uploadFile(file)
       set({ file, uploadResponse, loading: false })
+      if (uploadResponse.suggested_skills != null && uploadResponse.suggested_skills.length > 0) {
+        useSkillsStore.getState().setSuggestions(uploadResponse.suggested_skills)
+      }
     } catch {
       set({
         loading: false,
