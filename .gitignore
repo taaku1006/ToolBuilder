@@ -19,10 +19,21 @@ backend/outputs/*
 backend/tools/*
 backend/skills/*
 backend/db/*.db
+backend/db/*.db-shm
+backend/db/*.db-wal
 !backend/uploads/.gitkeep
 !backend/outputs/.gitkeep
 !backend/tools/.gitkeep
 !backend/skills/.gitkeep
+
+# Eval harness runtime data
+backend/eval/results/
+backend/eval/test_cases/files/
+# UUID-named test cases created from UI (keep case_*.json seeds)
+backend/eval/test_cases/[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]-*.json
+
+# Coverage
+backend/.coverage
 
 # Frontend
 frontend/node_modules/
