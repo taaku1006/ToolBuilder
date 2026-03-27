@@ -23,3 +23,4 @@ class GenerateResponse(BaseModel):
     tips: str
     agent_log: list[AgentLogEntry] = []
     reflection_steps: int = 0
+    debug_retries: int = 0

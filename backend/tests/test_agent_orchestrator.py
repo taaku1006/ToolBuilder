@@ -15,12 +15,16 @@ import pytest
 from core.config import Settings
 
 
-def _make_settings(reflection_enabled: bool = True) -> Settings:
+def _make_settings(
+    reflection_enabled: bool = True,
+    debug_loop_enabled: bool = False,
+) -> Settings:
     return Settings(
         openai_api_key="test-key-123",
         openai_model="gpt-4o",
         cors_origins="http://localhost:5173",
         reflection_enabled=reflection_enabled,
+        debug_loop_enabled=debug_loop_enabled,
     )
 
 
@@ -436,3 +440,250 @@ class TestOrchestrateGeneratorProtocol:
 
         assert len(entries1) >= 1
         assert len(entries2) >= 1
+
+
+# ---------------------------------------------------------------------------
+# orchestrate — Phase D (debug loop)
+# ---------------------------------------------------------------------------
+
+
+class TestOrchestratePhaseD:
+    """orchestrate with debug_loop_enabled=True runs Phase D after Phase C."""
+
+    @pytest.mark.asyncio
+    async def test_phase_d_start_entry_present(self) -> None:
+        """With debug_loop_enabled, Phase D start entry must be yielded."""
+        from services.agent_orchestrator import orchestrate
+        from services.sandbox import ExecutionResult
+
+        settings = _make_settings(debug_loop_enabled=True)
+
+        with (
+            patch("services.agent_orchestrator.OpenAIClient") as mock_cls,
+            patch("services.agent_orchestrator.execute_code") as mock_exec,
+        ):
+            mock_instance = MagicMock()
+            mock_instance.generate_code.return_value = _phase_c_json()
+            mock_cls.return_value = mock_instance
+
+            mock_exec.return_value = ExecutionResult(
+                stdout="ok",
+                stderr="",
+                elapsed_ms=100,
+                output_files=[],
+                success=True,
+            )
+
+            entries = [
+                entry
+                async for entry in orchestrate(
+                    task="集計する",
+                    file_id=None,
+                    settings=settings,
+                )
+            ]
+
+        phases = [e.phase for e in entries]
+        assert "D" in phases
+
+    @pytest.mark.asyncio
+    async def test_phase_d_complete_on_first_exec_success(self) -> None:
+        """When code executes successfully on first try, D/complete is yielded."""
+        from services.agent_orchestrator import orchestrate
+        from services.sandbox import ExecutionResult
+
+        settings = _make_settings(debug_loop_enabled=True)
+
+        with (
+            patch("services.agent_orchestrator.OpenAIClient") as mock_cls,
+            patch("services.agent_orchestrator.execute_code") as mock_exec,
+        ):
+            mock_instance = MagicMock()
+            mock_instance.generate_code.return_value = _phase_c_json()
+            mock_cls.return_value = mock_instance
+
+            mock_exec.return_value = ExecutionResult(
+                stdout="ok",
+                stderr="",
+                elapsed_ms=100,
+                output_files=[],
+                success=True,
+            )
+
+            entries = [
+                entry
+                async for entry in orchestrate(
+                    task="集計する",
+                    file_id=None,
+                    settings=settings,
+                )
+            ]
+
+        d_entries = [e for e in entries if e.phase == "D"]
+        actions = [e.action for e in d_entries]
+        assert "complete" in actions
+
+    @pytest.mark.asyncio
+    async def test_phase_d_disabled_when_setting_off(self) -> None:
+        """With debug_loop_enabled=False, no Phase D entries yielded."""
+        from services.agent_orchestrator import orchestrate
+
+        settings = _make_settings(debug_loop_enabled=False)
+
+        with patch("services.agent_orchestrator.OpenAIClient") as mock_cls:
+            mock_instance = MagicMock()
+            mock_instance.generate_code.return_value = _phase_c_json()
+            mock_cls.return_value = mock_instance
+
+            entries = [
+                entry
+                async for entry in orchestrate(
+                    task="集計する",
+                    file_id=None,
+                    settings=settings,
+                )
+            ]
+
+        phases = [e.phase for e in entries]
+        assert "D" not in phases
+
+    @pytest.mark.asyncio
+    async def test_phase_d_retry_entries_on_failure(self) -> None:
+        """When first exec fails and debug_loop fixes it, D/retry and D/complete are yielded."""
+        from services.agent_orchestrator import orchestrate
+        from services.debug_loop import DebugAttempt, DebugResult
+        from services.sandbox import ExecutionResult
+
+        settings = _make_settings(debug_loop_enabled=True)
+
+        fail_result = ExecutionResult(
+            stdout="",
+            stderr="NameError: x",
+            elapsed_ms=100,
+            output_files=[],
+            success=False,
+        )
+
+        # Simulate: first exec (orchestrator Phase D) fails, then debug_loop fixes it
+        debug_result_with_retry = DebugResult(
+            final_code="x = 1\nprint(x)",
+            final_stdout="1\n",
+            final_stderr="",
+            success=True,
+            attempts=[
+                DebugAttempt(
+                    retry_num=1,
+                    error="NameError: x",
+                    fixed_code="x = 1\nprint(x)",
+                    success=True,
+                )
+            ],
+            total_retries=1,
+        )
+
+        with (
+            patch("services.agent_orchestrator.OpenAIClient") as mock_cls,
+            patch("services.agent_orchestrator.execute_code") as mock_exec,
+            patch(
+                "services.agent_orchestrator.run_debug_loop",
+                new=AsyncMock(return_value=debug_result_with_retry),
+            ),
+        ):
+            mock_instance = MagicMock()
+            mock_instance.generate_code.return_value = _phase_c_json(python_code="bad code")
+            mock_cls.return_value = mock_instance
+
+            # First execute_code call (Phase D initial check) fails
+            mock_exec.return_value = fail_result
+
+            entries = [
+                entry
+                async for entry in orchestrate(
+                    task="集計する",
+                    file_id=None,
+                    settings=settings,
+                )
+            ]
+
+        d_entries = [e for e in entries if e.phase == "D"]
+        actions = [e.action for e in d_entries]
+        assert "retry" in actions
+        assert "complete" in actions
+
+    @pytest.mark.asyncio
+    async def test_final_payload_has_debug_retries_field(self) -> None:
+        """The final C/complete payload must include debug_retries field."""
+        from services.agent_orchestrator import orchestrate
+        from services.sandbox import ExecutionResult
+
+        settings = _make_settings(debug_loop_enabled=True)
+
+        with (
+            patch("services.agent_orchestrator.OpenAIClient") as mock_cls,
+            patch("services.agent_orchestrator.execute_code") as mock_exec,
+        ):
+            mock_instance = MagicMock()
+            mock_instance.generate_code.return_value = _phase_c_json()
+            mock_cls.return_value = mock_instance
+
+            mock_exec.return_value = ExecutionResult(
+                stdout="ok",
+                stderr="",
+                elapsed_ms=100,
+                output_files=[],
+                success=True,
+            )
+
+            entries = [
+                entry
+                async for entry in orchestrate(
+                    task="集計する",
+                    file_id=None,
+                    settings=settings,
+                )
+            ]
+
+        c_complete = next(
+            e for e in entries if e.phase == "C" and e.action == "complete"
+        )
+        payload = json.loads(c_complete.content)
+        assert "debug_retries" in payload
+
+    @pytest.mark.asyncio
+    async def test_final_payload_debug_retries_zero_on_first_success(self) -> None:
+        """debug_retries is 0 when code succeeds on first execution."""
+        from services.agent_orchestrator import orchestrate
+        from services.sandbox import ExecutionResult
+
+        settings = _make_settings(debug_loop_enabled=True)
+
+        with (
+            patch("services.agent_orchestrator.OpenAIClient") as mock_cls,
+            patch("services.agent_orchestrator.execute_code") as mock_exec,
+        ):
+            mock_instance = MagicMock()
+            mock_instance.generate_code.return_value = _phase_c_json()
+            mock_cls.return_value = mock_instance
+
+            mock_exec.return_value = ExecutionResult(
+                stdout="ok",
+                stderr="",
+                elapsed_ms=100,
+                output_files=[],
+                success=True,
+            )
+
+            entries = [
+                entry
+                async for entry in orchestrate(
+                    task="集計する",
+                    file_id=None,
+                    settings=settings,
+                )
+            ]
+
+        c_complete = next(
+            e for e in entries if e.phase == "C" and e.action == "complete"
+        )
+        payload = json.loads(c_complete.content)
+        assert payload["debug_retries"] == 0

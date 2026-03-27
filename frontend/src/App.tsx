@@ -4,6 +4,7 @@ import { FileUpload } from './components/FileUpload'
 import { SheetPreview } from './components/SheetPreview'
 import { TaskInput } from './components/TaskInput'
 import { AgentLog } from './components/AgentLog'
+import { DebugLog } from './components/DebugLog'
 import { CodeResult } from './components/CodeResult'
 import { useGenerateStore } from './stores/useGenerateStore'
 import { useFileStore } from './stores/useFileStore'
@@ -29,6 +30,7 @@ function App() {
               </div>
             )}
             <AgentLog agentLog={agentLog} />
+            <DebugLog agentLog={agentLog} />
             <CodeResult />
           </div>
         </main>
