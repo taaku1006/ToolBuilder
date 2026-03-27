@@ -26,3 +26,35 @@ export interface UploadResponse {
   filename: string
   sheets: SheetInfo[]
 }
+
+export interface ExecuteRequest {
+  code: string
+  file_id?: string
+}
+
+export interface ExecuteResponse {
+  stdout: string
+  stderr: string
+  elapsed_ms: number
+  output_files: string[]
+  success: boolean
+}
+
+export interface HistoryItem {
+  id: string
+  created_at: string
+  task: string
+  file_name: string | null
+  summary: string | null
+  python_code: string
+  steps: string[] | null
+  tips: string | null
+  memo: string | null
+  exec_stdout: string | null
+  exec_stderr: string | null
+}
+
+export interface HistoryListResponse {
+  items: HistoryItem[]
+  total: number
+}
