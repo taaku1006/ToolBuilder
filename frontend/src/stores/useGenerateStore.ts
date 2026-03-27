@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { postGenerate } from '../api/generate'
+import { createHistory } from '../api/history'
 import { createSkill } from '../api/skills'
+import { useHistoryStore } from './useHistoryStore'
 import { useSkillsStore } from './useSkillsStore'
 import type { GenerateResponse, AgentLogEntry } from '../types'
 
@@ -131,6 +133,20 @@ export const useGenerateStore = create<GenerateState>((set, get) => ({
                 tips: (data.tips as string) || '',
               }
               set({ response: result })
+
+              // Auto-save history
+              try {
+                await createHistory({
+                  task,
+                  python_code: result.python_code,
+                  summary: result.summary || null,
+                  steps: result.steps.length > 0 ? result.steps : null,
+                  tips: result.tips || null,
+                })
+                void useHistoryStore.getState().fetchHistory()
+              } catch {
+                // History save failure is non-critical
+              }
             } else if (parsed.phase === 'E' && parsed.action === 'complete') {
               // Phase E: auto-save skill if suggested
               try {
