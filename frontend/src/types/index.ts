@@ -5,12 +5,26 @@ export interface GenerateRequest {
   skill_id?: string
 }
 
+export interface AgentLogEntry {
+  phase: string
+  action: string
+  content: string
+  timestamp: string
+}
+
+export interface SSEEvent {
+  type: 'agent_log' | 'result' | 'error'
+  data: Record<string, unknown>
+}
+
 export interface GenerateResponse {
   id: string
   summary: string
   python_code: string
   steps: string[]
   tips: string
+  agent_log?: AgentLogEntry[]
+  reflection_steps?: number
 }
 
 export interface SheetInfo {

@@ -6,11 +6,12 @@ import json
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import StreamingResponse
 
 from core.config import Settings
 from core.deps import get_settings
-from core.exceptions import AppError
+from schemas.generate import AgentLogEntry as AgentLogEntrySchema
 from schemas.generate import GenerateRequest, GenerateResponse
 from services.openai_client import OpenAIClient
 from services.prompt_builder import SYSTEM_PROMPT, build_user_prompt
@@ -44,12 +45,13 @@ def _resolve_file_context(file_id: str | None, settings: Settings) -> str | None
         return None
 
 
-@router.post("/generate", response_model=GenerateResponse)
-def generate(
+def _build_sync_response(
     request: GenerateRequest,
-    settings: Settings = Depends(get_settings),
+    settings: Settings,
+    agent_log: list[AgentLogEntrySchema] | None = None,
+    reflection_steps: int = 0,
 ) -> GenerateResponse:
-    """Generate Python code for Excel processing from a natural language task."""
+    """Shared logic: call OpenAI and build a GenerateResponse synchronously."""
     file_context = _resolve_file_context(request.file_id, settings)
 
     user_prompt = build_user_prompt(
@@ -78,9 +80,61 @@ def generate(
             python_code=parsed["python_code"],
             steps=parsed["steps"],
             tips=parsed["tips"],
+            agent_log=agent_log or [],
+            reflection_steps=reflection_steps,
         )
     except KeyError as exc:
         raise HTTPException(
             status_code=500,
             detail=f"OpenAI response missing required field: {exc}",
         ) from exc
+
+
+@router.post("/generate", response_model=GenerateResponse)
+async def generate(
+    raw_request: Request,
+    request: GenerateRequest,
+    settings: Settings = Depends(get_settings),
+) -> GenerateResponse | StreamingResponse:
+    """Generate Python code — JSON or SSE streaming based on Accept header."""
+    accept = raw_request.headers.get("accept", "")
+
+    if "text/event-stream" in accept:
+        return _sse_response(request, settings)
+
+    # Default: synchronous JSON response (backward compatible)
+    return _build_sync_response(request, settings)
+
+
+def _sse_response(request: GenerateRequest, settings: Settings) -> StreamingResponse:
+    """Return an SSE StreamingResponse that streams orchestration progress."""
+
+    async def event_stream():  # noqa: ANN202
+        from services.agent_orchestrator import orchestrate
+
+        async for entry in orchestrate(
+            task=request.task,
+            file_id=request.file_id,
+            settings=settings,
+        ):
+            # Build a flat dict for each event; always include phase
+            event_dict: dict = {
+                "phase": entry.phase,
+                "action": entry.action,
+                "timestamp": entry.timestamp,
+            }
+
+            # For the final result entry (phase=C, action=complete), also merge
+            # the parsed content fields so python_code is accessible at top-level
+            if entry.phase == "C" and entry.action == "complete":
+                try:
+                    content_parsed = json.loads(entry.content)
+                    event_dict.update(content_parsed)
+                except (json.JSONDecodeError, ValueError):
+                    event_dict["content"] = entry.content
+            else:
+                event_dict["content"] = entry.content
+
+            yield f"data: {json.dumps(event_dict, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")

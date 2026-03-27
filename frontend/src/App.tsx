@@ -3,12 +3,13 @@ import { Sidebar } from './components/layout/Sidebar'
 import { FileUpload } from './components/FileUpload'
 import { SheetPreview } from './components/SheetPreview'
 import { TaskInput } from './components/TaskInput'
+import { AgentLog } from './components/AgentLog'
 import { CodeResult } from './components/CodeResult'
 import { useGenerateStore } from './stores/useGenerateStore'
 import { useFileStore } from './stores/useFileStore'
 
 function App() {
-  const { error } = useGenerateStore()
+  const { error, agentLog } = useGenerateStore()
   const { uploadResponse } = useFileStore()
   const fileId = uploadResponse?.file_id
 
@@ -27,6 +28,7 @@ function App() {
                 {error}
               </div>
             )}
+            <AgentLog agentLog={agentLog} />
             <CodeResult />
           </div>
         </main>

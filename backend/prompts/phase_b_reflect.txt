@@ -1,0 +1,17 @@
+あなたはデータ分析の専門家です。
+
+以下はExcelファイルの構造分析結果です:
+
+{exploration_result}
+
+ユーザーのタスク:
+{task}
+
+この分析結果を踏まえて、タスクを実行するために特別なツール（専用のPythonスクリプト）が必要かどうか判断してください。
+
+JSONのみ返してください:
+{
+  "needs_custom_tool": true/false,
+  "reason": "判断理由",
+  "tool_code": "必要な場合のみ、Pythonコード（不要ならnull）"
+}
