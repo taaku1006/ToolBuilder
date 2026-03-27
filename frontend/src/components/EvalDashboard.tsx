@@ -112,7 +112,7 @@ function ArchDetailPanel({ arch }: { arch: Architecture }) {
   )
 }
 
-function SuccessBar({ rate }: { rate: number }) {
+function SuccessBar({ rate, ciLow, ciHigh }: { rate: number; ciLow?: number; ciHigh?: number }) {
   const pct = Math.round(rate * 100)
   const color =
     pct >= 80 ? 'bg-green-500' : pct >= 50 ? 'bg-yellow-500' : 'bg-red-500'
@@ -121,7 +121,39 @@ function SuccessBar({ rate }: { rate: number }) {
       <div className="w-20 h-2 bg-gray-700 rounded-full overflow-hidden">
         <div className={`h-full ${color} rounded-full`} style={{ width: `${pct}%` }} />
       </div>
-      <span className="text-xs text-gray-400">{pct}%</span>
+      <div className="text-xs">
+        <span className="text-gray-400">{pct}%</span>
+        {ciLow != null && ciHigh != null && (
+          <span className="text-gray-600 ml-1">
+            ({Math.round(ciLow * 100)}-{Math.round(ciHigh * 100)}%)
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+const ERROR_COLORS: Record<string, string> = {
+  json_parse: 'bg-orange-900/50 text-orange-300',
+  syntax_error: 'bg-red-900/50 text-red-300',
+  runtime_error: 'bg-red-900/50 text-red-400',
+  timeout: 'bg-yellow-900/50 text-yellow-300',
+  api_error: 'bg-purple-900/50 text-purple-300',
+  file_not_found: 'bg-blue-900/50 text-blue-300',
+  unknown: 'bg-gray-700/50 text-gray-400',
+}
+
+function ErrorBreakdown({ breakdown }: { breakdown?: Record<string, number> }) {
+  if (!breakdown) return null
+  const errors = Object.entries(breakdown).filter(([k]) => k !== 'none')
+  if (errors.length === 0) return null
+  return (
+    <div className="flex flex-wrap gap-1 mt-1">
+      {errors.map(([cat, count]) => (
+        <span key={cat} className={`text-xs px-1.5 py-0.5 rounded ${ERROR_COLORS[cat] ?? ERROR_COLORS.unknown}`}>
+          {cat}: {count}
+        </span>
+      ))}
     </div>
   )
 }
@@ -215,7 +247,8 @@ function SummaryTable({ report, archs }: { report: EvalReport; archs: Architectu
                   )}
                 </td>
                 <td className="py-2 px-3">
-                  <SuccessBar rate={row.success_rate} />
+                  <SuccessBar rate={row.success_rate} ciLow={row.ci_low} ciHigh={row.ci_high} />
+                  <ErrorBreakdown breakdown={row.error_breakdown} />
                 </td>
                 <td className="text-right py-2 px-3 text-gray-300 font-mono text-xs">
                   {Math.round(row.avg_tokens).toLocaleString()}

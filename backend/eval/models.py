@@ -73,6 +73,7 @@ class EvalMetrics:
     phase_durations_ms: dict[str, int] = field(default_factory=dict)
     retry_count: int = 0
     code_executes: bool = False
+    error_category: str = "none"
 
     def estimated_cost_usd(self, model: str = "gpt-4o") -> float:
         """Estimate cost based on input/output token counts and model pricing."""

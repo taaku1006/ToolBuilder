@@ -41,6 +41,9 @@ export interface ArchSummary {
   avg_cost_usd: number
   total_cost_usd: number
   total_runs: number
+  ci_low?: number
+  ci_high?: number
+  error_breakdown?: Record<string, number>
 }
 
 export interface PastRun {

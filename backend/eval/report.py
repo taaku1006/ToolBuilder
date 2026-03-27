@@ -9,7 +9,20 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
+import math
+
 from eval.models import EvalResult
+
+
+def _wilson_ci(successes: int, n: int, z: float = 1.96) -> tuple[float, float]:
+    """Wilson score 95% confidence interval for a proportion."""
+    if n == 0:
+        return (0.0, 0.0)
+    p = successes / n
+    denom = 1 + z**2 / n
+    center = (p + z**2 / (2 * n)) / denom
+    margin = (z / denom) * math.sqrt(p * (1 - p) / n + z**2 / (4 * n**2))
+    return (max(0.0, center - margin), min(1.0, center + margin))
 
 
 class EvalReport:
@@ -47,6 +60,13 @@ class EvalReport:
             total_retries = sum(r.metrics.retry_count for r in results)
             total_cost = sum(r.metrics.estimated_cost_usd(r.model) for r in results)
 
+            error_counts: dict[str, int] = {}
+            for r in results:
+                cat = r.metrics.error_category
+                error_counts[cat] = error_counts.get(cat, 0) + 1
+
+            ci_low, ci_high = _wilson_ci(successes, n)
+
             table[arch_id] = {
                 "success_rate": successes / n if n > 0 else 0.0,
                 "avg_tokens": total_tokens / n if n > 0 else 0.0,
@@ -55,6 +75,9 @@ class EvalReport:
                 "avg_cost_usd": total_cost / n if n > 0 else 0.0,
                 "total_cost_usd": total_cost,
                 "total_runs": n,
+                "error_breakdown": error_counts,
+                "ci_low": ci_low,
+                "ci_high": ci_high,
             }
         return table
 

@@ -19,6 +19,30 @@ from services.agent_orchestrator import orchestrate
 logger = logging.getLogger(__name__)
 
 
+def classify_error(error: str | None, agent_log: list[dict]) -> str:
+    """Classify an error string into an actionable category."""
+    if not error:
+        # Check agent_log for Phase D failures
+        for entry in agent_log:
+            if entry.get("phase") == "D" and entry.get("action") == "error":
+                return "runtime_error"
+        return "none"
+
+    if "JSONDecodeError" in error or "Expecting value" in error:
+        return "json_parse"
+    if "SyntaxError" in error:
+        return "syntax_error"
+    if "timeout" in error.lower() or "timed out" in error.lower():
+        return "timeout"
+    if "OpenAI" in error or "API error" in error:
+        return "api_error"
+    if "not found" in error.lower():
+        return "file_not_found"
+    if "Traceback" in error or "Error" in error:
+        return "runtime_error"
+    return "unknown"
+
+
 class EvalRunner:
     """Runs evaluation: architecture x test_case -> EvalResult."""
 
@@ -89,6 +113,7 @@ class EvalRunner:
                     phase_durations_ms={},
                     retry_count=0,
                     code_executes=False,
+                    error_category=classify_error(error, []),
                 ),
                 agent_log=[],
                 generated_code=None,
@@ -156,6 +181,7 @@ class EvalRunner:
                 phase_durations_ms=phase_durations,
                 retry_count=retry_count,
                 code_executes=success,
+                error_category=classify_error(error, agent_log),
             ),
             agent_log=agent_log,
             generated_code=generated_code,
