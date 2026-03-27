@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 import { postGenerate } from '../api/generate'
+import { createSkill } from '../api/skills'
+import { useSkillsStore } from './useSkillsStore'
 import type { GenerateResponse, AgentLogEntry } from '../types'
 
 interface GenerateState {
@@ -120,8 +122,6 @@ export const useGenerateStore = create<GenerateState>((set, get) => ({
 
             // Phase C complete carries the final generated code
             if (parsed.phase === 'C' && parsed.action === 'complete') {
-              // The backend merges python_code, summary, steps, tips
-              // into the top-level event dict
               const data = parsed as unknown as Record<string, unknown>
               const result: GenerateResponse = {
                 id: (data.id as string) || '',
@@ -131,6 +131,24 @@ export const useGenerateStore = create<GenerateState>((set, get) => ({
                 tips: (data.tips as string) || '',
               }
               set({ response: result })
+            } else if (parsed.phase === 'E' && parsed.action === 'complete') {
+              // Phase E: auto-save skill if suggested
+              try {
+                const payload = JSON.parse(parsed.content) as Record<string, unknown>
+                if (payload.suggest_save) {
+                  await createSkill({
+                    title: (payload.task_summary as string) || task,
+                    tags: [],
+                    python_code: (payload.python_code as string) || '',
+                    task_summary: (payload.task_summary as string) || null,
+                  })
+                  // Refresh skills list in sidebar
+                  void useSkillsStore.getState().fetchSkills()
+                }
+              } catch {
+                // Skill save failure is non-critical
+              }
+              set((state) => ({ agentLog: [...state.agentLog, parsed] }))
             } else if (parsed.action === 'error') {
               set((state) => ({ agentLog: [...state.agentLog, parsed] }))
             } else {
