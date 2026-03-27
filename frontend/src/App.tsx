@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Header } from './components/layout/Header'
 import { Sidebar } from './components/layout/Sidebar'
 import { SkillsPanel } from './components/SkillsPanel'
@@ -14,6 +15,7 @@ function App() {
   const { error, agentLog } = useGenerateStore()
   const { uploadResponse } = useFileStore()
   const fileId = uploadResponse?.file_id
+  const [showDetails, setShowDetails] = useState(false)
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
@@ -33,9 +35,23 @@ function App() {
                 {error}
               </div>
             )}
-            <AgentLog agentLog={agentLog} />
-            <DebugLog agentLog={agentLog} />
             <CodeResult />
+            {agentLog.length > 0 && (
+              <div className="border-t border-gray-800 pt-4">
+                <button
+                  className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
+                  onClick={() => setShowDetails(!showDetails)}
+                >
+                  {showDetails ? '▼' : '▶'} 技術的な詳細を{showDetails ? '隠す' : '表示'}
+                </button>
+                {showDetails && (
+                  <div className="mt-3 space-y-4">
+                    <AgentLog agentLog={agentLog} />
+                    <DebugLog agentLog={agentLog} />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </main>
       </div>

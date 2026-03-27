@@ -6,8 +6,11 @@ After parsing, queries the skills database to find similar skills.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from sqlalchemy import select
@@ -71,13 +74,20 @@ async def upload_file(
     dest = upload_dir / safe_filename
     dest.write_bytes(content)
 
+    logger.info(
+        "File upload received",
+        extra={"upload_filename": filename, "extension": ext, "size_bytes": len(content), "file_id": file_id},
+    )
+
     # Parse the saved file
     try:
         sheets: list[SheetInfo] = parse_file(str(dest))
     except ValueError as exc:
+        logger.warning("File parse failed", extra={"file_id": file_id, "error": str(exc)})
         dest.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
+        logger.warning("File parse failed", extra={"file_id": file_id, "error": str(exc)})
         dest.unlink(missing_ok=True)
         raise HTTPException(
             status_code=400,
@@ -133,6 +143,11 @@ async def upload_file(
                 )
                 for m in matches
             ]
+
+    logger.info(
+        "File parsed",
+        extra={"file_id": file_id, "sheet_count": len(sheets), "total_headers": len(all_headers), "suggested_skill_count": len(suggested_skills)},
+    )
 
     return UploadResponse(
         file_id=file_id,

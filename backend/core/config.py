@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     exec_timeout: int = 30
     cors_origins: str = "http://localhost:5173"
 
+    log_level: str = "INFO"
+    log_format: str = "json"  # "json" or "text"
+
     reflection_enabled: bool = True
     reflection_max_steps: int = 3
     tools_dir: str = "./tools"

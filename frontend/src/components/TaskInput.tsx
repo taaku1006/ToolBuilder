@@ -6,12 +6,12 @@ interface TaskInputProps {
 }
 
 export function TaskInput({ fileId }: TaskInputProps) {
-  const { task, loading, setTask, generate } = useGenerateStore()
+  const { task, loading, setTask, generateSSE } = useGenerateStore()
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault()
-      generate(fileId)
+      generateSSE(fileId)
     }
   }
 
@@ -31,7 +31,7 @@ export function TaskInput({ fileId }: TaskInputProps) {
         </span>
         <button
           className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          onClick={() => generate(fileId)}
+          onClick={() => generateSSE(fileId)}
           disabled={loading}
         >
           {loading ? '生成中...' : '生成'}

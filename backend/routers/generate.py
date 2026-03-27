@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -68,6 +71,7 @@ def _build_sync_response(
     try:
         parsed = json.loads(raw_response)
     except (json.JSONDecodeError, ValueError) as exc:
+        logger.error("OpenAI returned invalid JSON", extra={"error": str(exc)})
         raise HTTPException(
             status_code=500,
             detail=f"OpenAI returned invalid JSON: {exc}",
@@ -84,6 +88,7 @@ def _build_sync_response(
             reflection_steps=reflection_steps,
         )
     except KeyError as exc:
+        logger.error("OpenAI response missing field", extra={"field": str(exc)})
         raise HTTPException(
             status_code=500,
             detail=f"OpenAI response missing required field: {exc}",
@@ -98,8 +103,13 @@ async def generate(
 ) -> GenerateResponse | StreamingResponse:
     """Generate Python code — JSON or SSE streaming based on Accept header."""
     accept = raw_request.headers.get("accept", "")
+    streaming = "text/event-stream" in accept
+    logger.info(
+        "Generate request",
+        extra={"task_length": len(request.task), "file_id": request.file_id, "streaming": streaming},
+    )
 
-    if "text/event-stream" in accept:
+    if streaming:
         return _sse_response(request, settings)
 
     # Default: synchronous JSON response (backward compatible)

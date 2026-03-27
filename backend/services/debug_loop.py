@@ -10,11 +10,14 @@ so the module can be tested without any module-level patching.
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 
 from services.openai_client import OpenAIClient
 from services.sandbox import ExecutionResult
+
+logger = logging.getLogger(__name__)
 
 _PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 
@@ -119,6 +122,11 @@ async def run_debug_loop(
         Frozen DebugResult with final code, stdout/stderr, success flag,
         attempts list, and total_retries count.
     """
+    logger.info(
+        "Debug loop started",
+        extra={"max_retries": max_retries, "code_length": len(code)},
+    )
+
     current_code = code
     attempts: list[DebugAttempt] = []
 
@@ -137,6 +145,7 @@ async def run_debug_loop(
     exec_result = await _execute(current_code)
 
     if exec_result.success:
+        logger.info("Debug loop: initial execution succeeded")
         return DebugResult(
             final_code=current_code,
             final_stdout=exec_result.stdout,
@@ -149,6 +158,10 @@ async def run_debug_loop(
     # Retry loop
     for retry_num in range(1, max_retries + 1):
         error_text = exec_result.stderr or exec_result.stdout
+        logger.info(
+            "Debug loop retry",
+            extra={"retry_num": retry_num, "error_preview": error_text[:200]},
+        )
 
         # Build the debug prompt and ask OpenAI for a fix
         debug_prompt = _build_debug_prompt(
@@ -177,6 +190,7 @@ async def run_debug_loop(
         attempts = [*attempts, attempt]
 
         if exec_result.success:
+            logger.info("Debug loop: retry succeeded", extra={"retry_num": retry_num})
             return DebugResult(
                 final_code=current_code,
                 final_stdout=exec_result.stdout,
@@ -187,6 +201,7 @@ async def run_debug_loop(
             )
 
     # All retries exhausted
+    logger.warning("Debug loop exhausted", extra={"max_retries": max_retries})
     return DebugResult(
         final_code=current_code,
         final_stdout=exec_result.stdout,

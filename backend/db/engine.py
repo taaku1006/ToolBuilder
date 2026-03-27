@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncGenerator
+
+logger = logging.getLogger(__name__)
 
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
@@ -43,6 +46,7 @@ def init_engine(database_url: str) -> None:
     global _engine, _async_session
     _engine = _make_engine(database_url)
     _async_session = _make_session_factory(_engine)
+    logger.info("Database engine initialized", extra={"database_url": database_url})
 
 
 async def create_tables() -> None:
@@ -51,6 +55,7 @@ async def create_tables() -> None:
         raise RuntimeError("Engine not initialised. Call init_engine() first.")
     async with _engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    logger.info("Database tables created")
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

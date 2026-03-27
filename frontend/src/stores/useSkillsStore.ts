@@ -1,7 +1,7 @@
 import { create } from 'zustand'
-import { getSkills, createSkill, deleteSkill } from '../api/skills'
+import { getSkills, createSkill, deleteSkill, runSkill } from '../api/skills'
 import type { CreateSkillData } from '../api/skills'
-import type { SkillItem, SkillSuggestion } from '../types'
+import type { SkillItem, SkillSuggestion, ExecuteResponse } from '../types'
 
 interface SkillsState {
   skills: SkillItem[]
@@ -10,11 +10,15 @@ interface SkillsState {
   loading: boolean
   error: string | null
   total: number
+  runResult: ExecuteResponse | null
+  running: boolean
   fetchSkills: () => Promise<void>
   setSuggestions: (suggestions: SkillSuggestion[]) => void
   selectSkill: (id: string | null) => void
   saveSkill: (data: CreateSkillData) => Promise<void>
   removeSkill: (id: string) => Promise<void>
+  executeSkill: (skillId: string, file: File) => Promise<void>
+  clearRunResult: () => void
   reset: () => void
 }
 
@@ -25,6 +29,8 @@ const initialState = {
   loading: false,
   error: null as string | null,
   total: 0,
+  runResult: null as ExecuteResponse | null,
+  running: false,
 }
 
 export const useSkillsStore = create<SkillsState>((set, get) => ({
@@ -73,6 +79,21 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
       set({ error: 'スキルの削除に失敗しました。' })
     }
   },
+
+  executeSkill: async (skillId: string, file: File) => {
+    set({ running: true, error: null, runResult: null })
+    try {
+      const result = await runSkill(skillId, file)
+      set({ runResult: result, running: false })
+      // Refresh skills to update use_count
+      const updated = await getSkills()
+      set({ skills: updated.items, total: updated.total })
+    } catch {
+      set({ running: false, error: 'ツールの実行に失敗しました。' })
+    }
+  },
+
+  clearRunResult: () => set({ runResult: null }),
 
   reset: () => set({ ...initialState }),
 }))

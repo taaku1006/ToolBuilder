@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from collections.abc import AsyncGenerator
 from datetime import datetime, timezone
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -75,6 +78,7 @@ async def list_history(
     result = await db.execute(stmt)
     records = result.scalars().all()
     items = [_model_to_item(r) for r in records]
+    logger.info("History list", extra={"query": q, "count": len(items)})
     return HistoryListResponse(items=items, total=len(items))
 
 
@@ -125,6 +129,7 @@ async def create_history(
     db.add(record)
     await db.commit()
     await db.refresh(record)
+    logger.info("History created", extra={"id": record.id})
 
     return _model_to_item(record)
 
@@ -145,6 +150,7 @@ async def delete_history(
         raise HTTPException(status_code=404, detail="History item not found")
     await db.delete(record)
     await db.commit()
+    logger.info("History deleted", extra={"id": item_id})
 
 
 # ---------------------------------------------------------------------------
@@ -166,5 +172,6 @@ async def update_memo(
     record.memo = payload.memo
     await db.commit()
     await db.refresh(record)
+    logger.info("History memo updated", extra={"id": item_id})
 
     return _model_to_item(record)

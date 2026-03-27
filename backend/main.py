@@ -2,16 +2,23 @@
 
 from __future__ import annotations
 
+import logging
+import time
+import uuid
 from contextlib import asynccontextmanager
 from collections.abc import AsyncGenerator
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from core.deps import get_settings
 from core.exceptions import AppError, app_error_handler
+from core.logging import setup_logging
 from db.engine import create_tables, init_engine
 from routers import execute, generate, history, skills, upload
+
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
@@ -19,9 +26,12 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Initialize DB engine and create tables on startup."""
+    setup_logging(settings.log_level, settings.log_format)
+    logger.info("Application starting", extra={"database_url": settings.database_url})
     init_engine(settings.database_url)
     await create_tables()
     yield
+    logger.info("Application shutdown")
 
 
 app = FastAPI(
@@ -30,6 +40,55 @@ app = FastAPI(
     description="Generate Python code for Excel processing from natural language.",
     lifespan=lifespan,
 )
+
+# ---------------------------------------------------------------------------
+# Request logging middleware
+# ---------------------------------------------------------------------------
+
+
+class LoggingMiddleware(BaseHTTPMiddleware):
+    """Log every request with method, path, status, and duration."""
+
+    async def dispatch(self, request: Request, call_next) -> Response:  # noqa: ANN001
+        request_id = uuid.uuid4().hex[:8]
+        start = time.monotonic()
+        logger.info(
+            "Request started",
+            extra={
+                "request_id": request_id,
+                "method": request.method,
+                "path": request.url.path,
+            },
+        )
+        try:
+            response = await call_next(request)
+            duration_ms = int((time.monotonic() - start) * 1000)
+            logger.info(
+                "Request completed",
+                extra={
+                    "request_id": request_id,
+                    "method": request.method,
+                    "path": request.url.path,
+                    "status_code": response.status_code,
+                    "duration_ms": duration_ms,
+                },
+            )
+            return response
+        except Exception:
+            duration_ms = int((time.monotonic() - start) * 1000)
+            logger.exception(
+                "Request failed",
+                extra={
+                    "request_id": request_id,
+                    "method": request.method,
+                    "path": request.url.path,
+                    "duration_ms": duration_ms,
+                },
+            )
+            raise
+
+
+app.add_middleware(LoggingMiddleware)
 
 # ---------------------------------------------------------------------------
 # CORS middleware

@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import hashlib
+import logging
 import os
 import subprocess
 import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -33,16 +37,29 @@ def _build_env(
     """
     env: dict[str, str] = {
         "PATH": os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin"),
-        "OUTPUT_DIR": str(exec_dir),
+        "OUTPUT_DIR": str(exec_dir.resolve()),
     }
 
     if file_id:
-        upload_path = Path(upload_dir)
+        upload_path = Path(upload_dir).resolve()
         matches = list(upload_path.glob(f"{file_id}_*"))
         if matches:
-            env["INPUT_FILE"] = str(matches[0])
+            env["INPUT_FILE"] = str(matches[0].resolve())
 
     return env
+
+
+_ERROR_PATTERNS = (
+    "エラーが発生しました",
+    "Traceback (most recent call last)",
+    "Error:",
+    "Exception:",
+)
+
+
+def _stdout_has_error(stdout: str) -> bool:
+    """Check if stdout contains error messages from a broad try/except."""
+    return any(pat in stdout for pat in _ERROR_PATTERNS)
 
 
 def _collect_output_files(exec_dir: Path) -> list[str]:
@@ -80,6 +97,7 @@ def execute_code(
         Frozen ExecutionResult with stdout, stderr, elapsed_ms, output_files, success.
     """
     exec_id = str(uuid.uuid4())
+    code_hash = hashlib.sha256(code.encode()).hexdigest()[:8]
     exec_dir = Path(output_dir) / exec_id
     exec_dir.mkdir(parents=True, exist_ok=True)
 
@@ -87,6 +105,11 @@ def execute_code(
     script_path.write_text(code, encoding="utf-8")
 
     env = _build_env(exec_dir, file_id, upload_dir)
+
+    logger.info(
+        "Sandbox execution started",
+        extra={"exec_id": exec_id, "code_hash": code_hash, "file_id": file_id, "timeout": timeout},
+    )
 
     start = time.monotonic()
     try:
@@ -100,11 +123,19 @@ def execute_code(
             encoding="utf-8",
         )
         elapsed_ms = int((time.monotonic() - start) * 1000)
-        success = proc.returncode == 0
         stdout = proc.stdout
         stderr = proc.stderr
+
+        # Detect failure even when returncode is 0 but code caught its own error
+        success = proc.returncode == 0
+        if success and _stdout_has_error(stdout):
+            success = False
     except subprocess.TimeoutExpired:
         elapsed_ms = int((time.monotonic() - start) * 1000)
+        logger.warning(
+            "Sandbox execution timed out",
+            extra={"exec_id": exec_id, "elapsed_ms": elapsed_ms, "timeout": timeout},
+        )
         return ExecutionResult(
             stdout="",
             stderr="Execution timed out",
@@ -114,6 +145,17 @@ def execute_code(
         )
 
     output_files = _collect_output_files(exec_dir)
+
+    if success:
+        logger.info(
+            "Sandbox execution completed",
+            extra={"exec_id": exec_id, "success": True, "elapsed_ms": elapsed_ms, "output_file_count": len(output_files)},
+        )
+    else:
+        logger.warning(
+            "Sandbox execution failed",
+            extra={"exec_id": exec_id, "success": False, "elapsed_ms": elapsed_ms, "stderr_preview": stderr[:200]},
+        )
 
     return ExecutionResult(
         stdout=stdout,

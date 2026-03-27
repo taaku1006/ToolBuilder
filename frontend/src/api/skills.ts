@@ -1,5 +1,5 @@
 import client from './client'
-import type { SkillItem, SkillsListResponse } from '../types'
+import type { SkillItem, SkillsListResponse, ExecuteResponse } from '../types'
 
 export interface CreateSkillData {
   title: string
@@ -26,4 +26,11 @@ export async function createSkill(data: CreateSkillData): Promise<SkillItem> {
 
 export async function deleteSkill(id: string): Promise<void> {
   await client.delete(`/skills/${id}`)
+}
+
+export async function runSkill(skillId: string, file: File): Promise<ExecuteResponse> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const response = await client.post<ExecuteResponse>(`/skills/${skillId}/run`, formData)
+  return response.data
 }

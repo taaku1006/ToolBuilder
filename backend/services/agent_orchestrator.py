@@ -8,11 +8,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
 from core.config import Settings
+
+logger = logging.getLogger(__name__)
 from services.openai_client import OpenAIClient
 from services.sandbox import execute_code
 from services.reflection_engine import run_phase_a, run_phase_b, run_phase_c
@@ -87,6 +90,17 @@ async def orchestrate(
     Yields AgentLogEntry objects for each phase start/complete event and
     a final entry whose content is JSON with the generated python_code.
     """
+    logger.info(
+        "Orchestration started",
+        extra={
+            "task_length": len(task),
+            "file_id": file_id,
+            "reflection_enabled": settings.reflection_enabled,
+            "debug_loop_enabled": settings.debug_loop_enabled,
+            "skills_enabled": settings.skills_enabled,
+        },
+    )
+
     openai_client = OpenAIClient(settings)
     file_context = _resolve_file_context(file_id, settings)
 
@@ -250,6 +264,10 @@ async def orchestrate(
     # Determine overall execution success for Phase E suggestion
     exec_succeeded = not settings.debug_loop_enabled or (
         settings.debug_loop_enabled and debug_retries < settings.debug_retry_limit
+    )
+    logger.info(
+        "Orchestration completed",
+        extra={"debug_retries": debug_retries, "exec_succeeded": exec_succeeded},
     )
 
     result_payload = json.dumps(

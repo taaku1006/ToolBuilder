@@ -8,11 +8,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 
 from services.openai_client import OpenAIClient
 from services.sandbox import ExecutionResult
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Result dataclasses — all frozen (immutable)
@@ -76,6 +79,11 @@ async def run_phase_a(
     Returns:
         Frozen PhaseAResult with exploration_script, exploration_output, success.
     """
+    logger.info(
+        "Phase A started",
+        extra={"file_id": file_id, "file_context_length": len(file_context)},
+    )
+
     phase_a_prompt = _PROMPTS_DIR / "phase_a_exploration.txt"
     system_prompt = phase_a_prompt.read_text(encoding="utf-8")
 
@@ -98,6 +106,11 @@ async def run_phase_a(
         file_id=file_id,
         upload_dir=upload_dir,
         output_dir=output_dir,
+    )
+
+    logger.info(
+        "Phase A completed",
+        extra={"success": result.success, "output_length": len(result.stdout)},
     )
 
     return PhaseAResult(
@@ -134,6 +147,8 @@ async def run_phase_b(
         json.JSONDecodeError: If OpenAI does not return valid JSON.
         KeyError: If the JSON is missing required keys.
     """
+    logger.info("Phase B started", extra={"task_length": len(task)})
+
     phase_b_prompt = _PROMPTS_DIR / "phase_b_reflect.txt"
     template = phase_b_prompt.read_text(encoding="utf-8")
 
@@ -163,6 +178,11 @@ async def run_phase_b(
             output_dir=output_dir,
         )
         tool_output = exec_result.stdout
+
+    logger.info(
+        "Phase B completed",
+        extra={"needs_custom_tool": needs_custom_tool, "reason_preview": reason[:100]},
+    )
 
     return PhaseBResult(
         needs_custom_tool=needs_custom_tool,
@@ -194,6 +214,11 @@ async def run_phase_c(
         json.JSONDecodeError: If OpenAI does not return valid JSON.
         KeyError: If the JSON is missing required keys.
     """
+    logger.info(
+        "Phase C started",
+        extra={"task_length": len(task), "has_file_context": file_context is not None},
+    )
+
     phase_c_prompt = _PROMPTS_DIR / "phase_c_generate.txt"
     template = phase_c_prompt.read_text(encoding="utf-8")
 
@@ -217,6 +242,11 @@ async def run_phase_c(
     )
 
     parsed: dict = json.loads(raw)
+
+    logger.info(
+        "Phase C completed",
+        extra={"code_length": len(parsed["python_code"]), "steps_count": len(parsed["steps"])},
+    )
 
     return PhaseCResult(
         summary=parsed["summary"],

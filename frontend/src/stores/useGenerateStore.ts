@@ -65,9 +65,12 @@ export const useGenerateStore = create<GenerateState>((set, get) => ({
     }
 
     try {
-      const fetchResponse = await fetch('/api/generate/stream', {
+      const fetchResponse = await fetch('/api/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'text/event-stream',
+        },
         body: JSON.stringify(body),
       })
 
@@ -115,15 +118,21 @@ export const useGenerateStore = create<GenerateState>((set, get) => ({
               continue
             }
 
-            if (parsed.phase === 'complete') {
-              try {
-                const result = JSON.parse(parsed.content) as GenerateResponse
-                set({ response: result })
-              } catch {
-                set({ error: 'コード生成に失敗しました。もう一度お試しください。' })
+            // Phase C complete carries the final generated code
+            if (parsed.phase === 'C' && parsed.action === 'complete') {
+              // The backend merges python_code, summary, steps, tips
+              // into the top-level event dict
+              const data = parsed as unknown as Record<string, unknown>
+              const result: GenerateResponse = {
+                id: (data.id as string) || '',
+                summary: (data.summary as string) || '',
+                python_code: (data.python_code as string) || '',
+                steps: (data.steps as string[]) || [],
+                tips: (data.tips as string) || '',
               }
-            } else if (parsed.phase === 'error') {
-              set({ error: parsed.content })
+              set({ response: result })
+            } else if (parsed.action === 'error') {
+              set((state) => ({ agentLog: [...state.agentLog, parsed] }))
             } else {
               set((state) => ({ agentLog: [...state.agentLog, parsed] }))
             }

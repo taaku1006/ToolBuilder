@@ -1,5 +1,9 @@
+import logging
+
 from fastapi import Request
 from fastapi.responses import JSONResponse
+
+logger = logging.getLogger(__name__)
 
 
 class AppError(Exception):
@@ -10,6 +14,10 @@ class AppError(Exception):
 
 
 async def app_error_handler(_request: Request, exc: AppError) -> JSONResponse:
+    logger.warning(
+        "AppError handled",
+        extra={"status_code": exc.status_code, "error_message": exc.message, "path": _request.url.path},
+    )
     return JSONResponse(
         status_code=exc.status_code,
         content={"detail": exc.message},
