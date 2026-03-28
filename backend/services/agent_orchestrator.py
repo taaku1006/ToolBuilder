@@ -21,6 +21,7 @@ from services.sandbox import execute_code
 from services.reflection_engine import run_phase_a, run_phase_b, run_phase_c
 from services.debug_loop import run_debug_loop
 from services.xlsx_parser import SheetInfo, build_file_context, parse_file
+from services.langfuse_tracing import OrchestrationTrace
 
 
 # ---------------------------------------------------------------------------
@@ -103,6 +104,12 @@ async def orchestrate(
 
     openai_client = OpenAIClient(settings)
     file_context = _resolve_file_context(file_id, settings)
+    trace = OrchestrationTrace(settings, task, metadata={
+        "file_id": file_id,
+        "model": settings.openai_model,
+        "reflection_enabled": settings.reflection_enabled,
+        "debug_loop_enabled": settings.debug_loop_enabled,
+    })
 
     exploration_result = ""
     reflection_result = ""
@@ -119,6 +126,7 @@ async def orchestrate(
     # Phase A — exploration (only when file is provided AND reflection on)
     # ------------------------------------------------------------------
     if file_id and settings.reflection_enabled:
+        trace.start_phase("A")
         yield AgentLogEntry(
             phase="A",
             action="start",
@@ -139,6 +147,7 @@ async def orchestrate(
 
         exploration_result = phase_a.exploration_output
 
+        trace.end_phase("A", output=exploration_result[:500], status="complete" if phase_a.success else "error")
         yield AgentLogEntry(
             phase="A",
             action="complete" if phase_a.success else "error",
@@ -149,6 +158,7 @@ async def orchestrate(
         # ------------------------------------------------------------------
         # Phase B — reflection / tool synthesis
         # ------------------------------------------------------------------
+        trace.start_phase("B")
         yield AgentLogEntry(
             phase="B",
             action="start",
@@ -177,6 +187,7 @@ async def orchestrate(
             ensure_ascii=False,
         )
 
+        trace.end_phase("B", output=reflection_result[:500])
         yield AgentLogEntry(
             phase="B",
             action="complete",
@@ -187,6 +198,7 @@ async def orchestrate(
     # ------------------------------------------------------------------
     # Phase C — main code generation
     # ------------------------------------------------------------------
+    trace.start_phase("C")
     yield AgentLogEntry(
         phase="C",
         action="start",
@@ -211,6 +223,7 @@ async def orchestrate(
     debug_retries = 0
 
     if settings.debug_loop_enabled:
+        trace.start_phase("D")
         yield AgentLogEntry(
             phase="D",
             action="start",
@@ -232,6 +245,7 @@ async def orchestrate(
 
         if first_exec.success:
             phase_tokens["D"] = _token_snapshot() - _tokens_before_d
+            trace.end_phase("D", output="初回実行で成功")
             yield AgentLogEntry(
                 phase="D",
                 action="complete",
@@ -265,6 +279,7 @@ async def orchestrate(
             if debug_result.success:
                 python_code = debug_result.final_code
                 debug_retries = debug_result.total_retries
+                trace.end_phase("D", output=f"{debug_result.total_retries}回のリトライで成功")
                 yield AgentLogEntry(
                     phase="D",
                     action="complete",
@@ -273,6 +288,7 @@ async def orchestrate(
                 )
             else:
                 debug_retries = debug_result.total_retries
+                trace.end_phase("D", output=f"{settings.debug_retry_limit}回リトライ失敗", status="error")
                 yield AgentLogEntry(
                     phase="D",
                     action="error",
@@ -305,6 +321,7 @@ async def orchestrate(
         ensure_ascii=False,
     )
 
+    trace.end_phase("C", output={"summary": phase_c.summary, "code_length": len(python_code)})
     yield AgentLogEntry(
         phase="C",
         action="complete",
@@ -316,6 +333,7 @@ async def orchestrate(
     # Phase E — skill save suggestion
     # ------------------------------------------------------------------
     if settings.skills_enabled:
+        trace.start_phase("E")
         yield AgentLogEntry(
             phase="E",
             action="start",
@@ -333,6 +351,7 @@ async def orchestrate(
                 },
                 ensure_ascii=False,
             )
+            trace.end_phase("E", output={"suggest_save": True})
             yield AgentLogEntry(
                 phase="E",
                 action="complete",
@@ -340,6 +359,7 @@ async def orchestrate(
                 timestamp=_now_iso(),
             )
         else:
+            trace.end_phase("E", output={"suggest_save": False})
             yield AgentLogEntry(
                 phase="E",
                 action="complete",
@@ -349,3 +369,6 @@ async def orchestrate(
                 ),
                 timestamp=_now_iso(),
             )
+
+    trace.end_trace(output={"success": exec_succeeded, "debug_retries": debug_retries})
+    trace.flush()
