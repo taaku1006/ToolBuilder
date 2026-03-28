@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     skills_dir: str = "./skills"
     skills_similarity_threshold: float = 0.4
 
+    langfuse_enabled: bool = False
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+    langfuse_host: str = "http://localhost:3000"
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",")]

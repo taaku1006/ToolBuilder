@@ -26,6 +26,7 @@ class TestOpenAIClientTokenTracking:
         mock_settings = MagicMock()
         mock_settings.openai_api_key = "test"
         mock_settings.openai_model = "gpt-4o"
+        mock_settings.langfuse_enabled = False
 
         with patch("services.openai_client.OpenAI"):
             client = OpenAIClient(mock_settings)
@@ -37,6 +38,7 @@ class TestOpenAIClientTokenTracking:
         mock_settings = MagicMock()
         mock_settings.openai_api_key = "test"
         mock_settings.openai_model = "gpt-4o"
+        mock_settings.langfuse_enabled = False
 
         with patch("services.openai_client.OpenAI") as mock_cls:
             mock_instance = MagicMock()
@@ -64,6 +66,7 @@ class TestOpenAIClientTokenTracking:
         mock_settings = MagicMock()
         mock_settings.openai_api_key = "test"
         mock_settings.openai_model = "gpt-4o"
+        mock_settings.langfuse_enabled = False
 
         with patch("services.openai_client.OpenAI") as mock_cls:
             mock_instance = MagicMock()
@@ -96,6 +99,7 @@ class TestOpenAIClientTokenTracking:
         mock_settings = MagicMock()
         mock_settings.openai_api_key = "test"
         mock_settings.openai_model = "gpt-4o"
+        mock_settings.langfuse_enabled = False
 
         with patch("services.openai_client.OpenAI") as mock_cls:
             mock_instance = MagicMock()

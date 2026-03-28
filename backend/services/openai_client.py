@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 import time
 
@@ -19,9 +20,30 @@ def _strip_code_fence(text: str) -> str:
     return m.group(1).strip() if m else stripped
 
 
+def _init_langfuse_env(settings: Settings) -> None:
+    """Set Langfuse env vars so the SDK picks them up."""
+    os.environ.setdefault("LANGFUSE_PUBLIC_KEY", settings.langfuse_public_key)
+    os.environ.setdefault("LANGFUSE_SECRET_KEY", settings.langfuse_secret_key)
+    os.environ.setdefault("LANGFUSE_HOST", settings.langfuse_host)
+
+
 class OpenAIClient:
     def __init__(self, settings: Settings) -> None:
-        self._client = OpenAI(api_key=settings.openai_api_key)
+        self._langfuse_enabled = settings.langfuse_enabled
+        if self._langfuse_enabled:
+            try:
+                _init_langfuse_env(settings)
+                from langfuse.openai import OpenAI as LangfuseOpenAI
+
+                self._client = LangfuseOpenAI(api_key=settings.openai_api_key)
+                logger.info("OpenAI client created with Langfuse tracing enabled")
+            except ImportError:
+                logger.warning("langfuse not installed, falling back to standard OpenAI client")
+                self._client = OpenAI(api_key=settings.openai_api_key)
+                self._langfuse_enabled = False
+        else:
+            self._client = OpenAI(api_key=settings.openai_api_key)
+
         self._model = settings.openai_model
         self.total_tokens: int = 0
         self.prompt_tokens: int = 0
