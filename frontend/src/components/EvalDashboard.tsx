@@ -13,6 +13,12 @@ import {
   listRuns,
   createTestCase,
   deleteTestCase,
+  getRunSnapshot,
+  diffRuns,
+  compareRuns,
+  type RunSnapshot,
+  type SnapshotDiff,
+  type RunComparisonResult,
 } from '../api/eval'
 
 // ---------------------------------------------------------------------------
@@ -270,6 +276,158 @@ function ComparisonMatrix({
   )
 }
 
+function PromptSnapshotView({ snapshot }: { snapshot: RunSnapshot }) {
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const prompts = Object.entries(snapshot.prompt_contents)
+
+  return (
+    <div className="space-y-2">
+      <div className="text-xs text-gray-500 font-mono">
+        snapshot: {snapshot.snapshot_hash.slice(0, 16)}...
+      </div>
+      {prompts.map(([name, content]) => {
+        const hash = snapshot.prompt_hashes[name] ?? ''
+        const isOpen = expanded === name
+        return (
+          <div key={name} className="border border-gray-700 rounded-lg overflow-hidden">
+            <button
+              onClick={() => setExpanded(isOpen ? null : name)}
+              className="w-full text-left px-3 py-2 flex items-center justify-between hover:bg-gray-800 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <PhaseTag phase={name.replace('phase_', '').toUpperCase()} />
+                <span className="text-sm text-gray-300">{name}</span>
+                <span className="text-xs text-gray-600 font-mono">{hash.slice(0, 12)}...</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500">{content.length} chars</span>
+                <span className="text-xs text-gray-600">{isOpen ? '▼' : '▶'}</span>
+              </div>
+            </button>
+            {isOpen && (
+              <pre className="px-3 py-2 bg-gray-950 text-xs text-gray-400 overflow-x-auto whitespace-pre-wrap border-t border-gray-700 max-h-64 overflow-y-auto">
+                {content}
+              </pre>
+            )}
+          </div>
+        )
+      })}
+
+      {Object.keys(snapshot.architecture_configs).length > 0 && (
+        <div className="border border-gray-700 rounded-lg overflow-hidden">
+          <div className="px-3 py-2 text-xs text-gray-500">
+            Architecture Configs: {Object.keys(snapshot.architecture_configs).join(', ')}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function RunComparisonView({
+  comparison,
+  diff,
+}: {
+  comparison: RunComparisonResult
+  diff: SnapshotDiff | null
+}) {
+  return (
+    <div className="space-y-3">
+      {/* Prompt/Config diff */}
+      {diff && (
+        <div className="space-y-1">
+          {diff.is_identical ? (
+            <div className="text-xs text-gray-500">Prompts and configs are identical between runs.</div>
+          ) : (
+            <>
+              {diff.changed_prompts.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-yellow-400">Changed prompts:</span>
+                  {diff.changed_prompts.map((p) => (
+                    <span key={p} className="text-xs px-1.5 py-0.5 bg-yellow-900/50 text-yellow-300 rounded font-mono">
+                      {p}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {diff.changed_configs.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-yellow-400">Changed configs:</span>
+                  {diff.changed_configs.map((c) => (
+                    <span key={c} className="text-xs px-1.5 py-0.5 bg-yellow-900/50 text-yellow-300 rounded font-mono">
+                      {c}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Regression/Fix stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-gray-800 rounded-lg p-3 text-center">
+          <div className="text-2xl font-bold text-red-400">{comparison.regressions.length}</div>
+          <div className="text-xs text-gray-500">Regressions</div>
+        </div>
+        <div className="bg-gray-800 rounded-lg p-3 text-center">
+          <div className="text-2xl font-bold text-green-400">{comparison.fixes.length}</div>
+          <div className="text-xs text-gray-500">Fixes</div>
+        </div>
+        <div className="bg-gray-800 rounded-lg p-3 text-center">
+          <div className="text-2xl font-bold text-gray-400">{comparison.unchanged_pass}</div>
+          <div className="text-xs text-gray-500">Still Pass</div>
+        </div>
+        <div className="bg-gray-800 rounded-lg p-3 text-center">
+          <div className="text-2xl font-bold text-gray-600">{comparison.unchanged_fail}</div>
+          <div className="text-xs text-gray-500">Still Fail</div>
+        </div>
+      </div>
+
+      {/* Regression details */}
+      {comparison.regressions.length > 0 && (
+        <div className="space-y-1">
+          <div className="text-xs text-red-400 font-medium">Regressions (pass → fail)</div>
+          {comparison.regressions.map((r, i) => (
+            <div key={i} className="flex items-center gap-2 text-xs">
+              <span className="text-red-400">✕</span>
+              <span className="font-mono text-gray-400">{r.architecture_id}</span>
+              <span className="text-gray-600">×</span>
+              <span className="font-mono text-gray-400">
+                {r.test_case_id.length > 12 ? r.test_case_id.slice(0, 8) + '...' : r.test_case_id}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Fix details */}
+      {comparison.fixes.length > 0 && (
+        <div className="space-y-1">
+          <div className="text-xs text-green-400 font-medium">Fixes (fail → pass)</div>
+          {comparison.fixes.map((f, i) => (
+            <div key={i} className="flex items-center gap-2 text-xs">
+              <span className="text-green-400">✓</span>
+              <span className="font-mono text-gray-400">{f.architecture_id}</span>
+              <span className="text-gray-600">×</span>
+              <span className="font-mono text-gray-400">
+                {f.test_case_id.length > 12 ? f.test_case_id.slice(0, 8) + '...' : f.test_case_id}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {comparison.new_cases.length > 0 && (
+        <div className="text-xs text-blue-400">
+          {comparison.new_cases.length} new test case(s)
+        </div>
+      )}
+    </div>
+  )
+}
+
 function SummaryTable({ report, archs }: { report: EvalReport; archs: Architecture[] }) {
   const { summary, best_architecture } = report
   const archIds = Object.keys(summary)
@@ -453,6 +611,11 @@ export function EvalDashboard() {
 
   const [runStatus, setRunStatus] = useState<RunStatus | null>(null)
   const [viewingReport, setViewingReport] = useState<EvalReport | null>(null)
+  const [viewingRunId, setViewingRunId] = useState<string | null>(null)
+  const [snapshot, setSnapshot] = useState<RunSnapshot | null>(null)
+  const [comparisonResult, setComparisonResult] = useState<RunComparisonResult | null>(null)
+  const [snapshotDiff, setSnapshotDiff] = useState<SnapshotDiff | null>(null)
+  const [compareBaselineId, setCompareBaselineId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -483,7 +646,11 @@ export function EvalDashboard() {
         if (status.status !== 'running') {
           if (pollRef.current) clearInterval(pollRef.current)
           pollRef.current = null
-          if (status.report) setViewingReport(status.report as EvalReport)
+          if (status.report) {
+            setViewingReport(status.report as EvalReport)
+            setViewingRunId(status.run_id)
+            getRunSnapshot(status.run_id).then(setSnapshot).catch(() => setSnapshot(null))
+          }
           listRuns().then(setPastRuns).catch(() => {})
         }
       } catch {
@@ -529,8 +696,34 @@ export function EvalDashboard() {
     try {
       const status = await getRunStatus(runId)
       if (status.report) setViewingReport(status.report as EvalReport)
+      setViewingRunId(runId)
+      setComparisonResult(null)
+      setSnapshotDiff(null)
+      setCompareBaselineId(null)
+      // Load snapshot (may not exist for old runs)
+      try {
+        const snap = await getRunSnapshot(runId)
+        setSnapshot(snap)
+      } catch {
+        setSnapshot(null)
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to load run')
+    }
+  }
+
+  const handleCompareRun = async (baselineId: string) => {
+    if (!viewingRunId) return
+    setCompareBaselineId(baselineId)
+    try {
+      const [comp, diff] = await Promise.all([
+        compareRuns(viewingRunId, baselineId),
+        diffRuns(viewingRunId, baselineId).catch(() => null),
+      ])
+      setComparisonResult(comp)
+      setSnapshotDiff(diff)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to compare')
     }
   }
 
@@ -735,6 +928,41 @@ export function EvalDashboard() {
             <h3 className="text-sm font-medium text-gray-300">Comparison Matrix</h3>
             <ComparisonMatrix report={viewingReport} />
           </div>
+
+          {/* Prompt Snapshot */}
+          {snapshot && (
+            <div className="bg-gray-900 rounded-lg p-4 space-y-3">
+              <h3 className="text-sm font-medium text-gray-300">Prompt Snapshot</h3>
+              <PromptSnapshotView snapshot={snapshot} />
+            </div>
+          )}
+
+          {/* Run Comparison */}
+          {viewingRunId && pastRuns.length > 1 && (
+            <div className="bg-gray-900 rounded-lg p-4 space-y-3">
+              <h3 className="text-sm font-medium text-gray-300">Compare with Previous Run</h3>
+              <div className="flex flex-wrap gap-2">
+                {pastRuns
+                  .filter((r) => r.run_id !== viewingRunId && r.status === 'completed')
+                  .map((r) => (
+                    <button
+                      key={r.run_id}
+                      onClick={() => handleCompareRun(r.run_id)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-mono transition-colors ${
+                        compareBaselineId === r.run_id
+                          ? 'bg-blue-700 text-white'
+                          : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                      }`}
+                    >
+                      {r.run_id}
+                    </button>
+                  ))}
+              </div>
+              {comparisonResult && (
+                <RunComparisonView comparison={comparisonResult} diff={snapshotDiff} />
+              )}
+            </div>
+          )}
         </div>
       )}
 

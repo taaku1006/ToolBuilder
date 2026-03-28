@@ -110,3 +110,41 @@ export async function createTestCase(
 export async function deleteTestCase(id: string): Promise<void> {
   await client.delete(`/eval/test-cases/${id}`)
 }
+
+export interface RunSnapshot {
+  prompt_hashes: Record<string, string>
+  prompt_contents: Record<string, string>
+  architecture_configs: Record<string, Record<string, unknown>>
+  snapshot_hash: string
+}
+
+export interface SnapshotDiff {
+  run_id: string
+  other_id: string
+  changed_prompts: string[]
+  changed_configs: string[]
+  is_identical: boolean
+}
+
+export interface RunComparisonResult {
+  regressions: Array<{ test_case_id: string; architecture_id: string }>
+  fixes: Array<{ test_case_id: string; architecture_id: string }>
+  unchanged_pass: number
+  unchanged_fail: number
+  new_cases: string[]
+}
+
+export async function getRunSnapshot(runId: string): Promise<RunSnapshot> {
+  const res = await client.get<RunSnapshot>(`/eval/run/${runId}/snapshot`)
+  return res.data
+}
+
+export async function diffRuns(runId: string, otherId: string): Promise<SnapshotDiff> {
+  const res = await client.get<SnapshotDiff>(`/eval/run/${runId}/diff/${otherId}`)
+  return res.data
+}
+
+export async function compareRuns(runId: string, baselineId: string): Promise<RunComparisonResult> {
+  const res = await client.get<RunComparisonResult>(`/eval/run/${runId}/compare/${baselineId}`)
+  return res.data
+}
