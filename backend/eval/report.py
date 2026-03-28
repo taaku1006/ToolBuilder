@@ -65,6 +65,19 @@ class EvalReport:
                 cat = r.metrics.error_category
                 error_counts[cat] = error_counts.get(cat, 0) + 1
 
+            # Compute per-phase token averages across all runs.
+            # For each phase, average is computed over runs that reported that phase.
+            phase_token_sums: dict[str, float] = defaultdict(float)
+            phase_token_counts: dict[str, int] = defaultdict(int)
+            for r in results:
+                for phase, tokens in r.metrics.phase_tokens.items():
+                    phase_token_sums[phase] += tokens
+                    phase_token_counts[phase] += 1
+            avg_phase_tokens: dict[str, float] = {
+                phase: phase_token_sums[phase] / phase_token_counts[phase]
+                for phase in phase_token_sums
+            }
+
             ci_low, ci_high = _wilson_ci(successes, n)
 
             table[arch_id] = {
@@ -78,6 +91,7 @@ class EvalReport:
                 "error_breakdown": error_counts,
                 "ci_low": ci_low,
                 "ci_high": ci_high,
+                "avg_phase_tokens": avg_phase_tokens,
             }
         return table
 

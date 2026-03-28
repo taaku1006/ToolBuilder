@@ -44,6 +44,7 @@ export interface ArchSummary {
   ci_low?: number
   ci_high?: number
   error_breakdown?: Record<string, number>
+  avg_phase_tokens?: Record<string, number>
 }
 
 export interface PastRun {

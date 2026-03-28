@@ -71,6 +71,7 @@ class EvalMetrics:
     completion_tokens: int = 0
     api_calls: int = 0
     phase_durations_ms: dict[str, int] = field(default_factory=dict)
+    phase_tokens: dict[str, int] = field(default_factory=dict)
     retry_count: int = 0
     code_executes: bool = False
     error_category: str = "none"

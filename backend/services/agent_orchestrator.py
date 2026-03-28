@@ -107,6 +107,14 @@ async def orchestrate(
     exploration_result = ""
     reflection_result = ""
 
+    # Track per-phase token deltas: snapshot total_tokens before each phase.
+    phase_tokens: dict[str, int] = {}
+
+    def _token_snapshot() -> int:
+        """Return current cumulative token count (int-safe)."""
+        v = openai_client.total_tokens
+        return int(v) if isinstance(v, int) else 0
+
     # ------------------------------------------------------------------
     # Phase A — exploration (only when file is provided AND reflection on)
     # ------------------------------------------------------------------
@@ -118,6 +126,7 @@ async def orchestrate(
             timestamp=_now_iso(),
         )
 
+        _tokens_before_a = _token_snapshot()
         phase_a = await run_phase_a(
             openai_client=openai_client,
             sandbox_execute=execute_code,
@@ -126,6 +135,7 @@ async def orchestrate(
             upload_dir=settings.upload_dir,
             output_dir=settings.output_dir,
         )
+        phase_tokens["A"] = _token_snapshot() - _tokens_before_a
 
         exploration_result = phase_a.exploration_output
 
@@ -146,6 +156,7 @@ async def orchestrate(
             timestamp=_now_iso(),
         )
 
+        _tokens_before_b = _token_snapshot()
         phase_b = await run_phase_b(
             openai_client=openai_client,
             sandbox_execute=execute_code,
@@ -155,6 +166,7 @@ async def orchestrate(
             upload_dir=settings.upload_dir,
             output_dir=settings.output_dir,
         )
+        phase_tokens["B"] = _token_snapshot() - _tokens_before_b
 
         reflection_result = json.dumps(
             {
@@ -182,6 +194,7 @@ async def orchestrate(
         timestamp=_now_iso(),
     )
 
+    _tokens_before_c = _token_snapshot()
     phase_c = await run_phase_c(
         openai_client=openai_client,
         exploration_result=exploration_result,
@@ -189,6 +202,7 @@ async def orchestrate(
         task=task,
         file_context=file_context,
     )
+    phase_tokens["C"] = _token_snapshot() - _tokens_before_c
 
     # ------------------------------------------------------------------
     # Phase D — autonomous debugging loop
@@ -204,6 +218,8 @@ async def orchestrate(
             timestamp=_now_iso(),
         )
 
+        _tokens_before_d = _token_snapshot()
+
         # First execution of Phase C code
         first_exec = await asyncio.to_thread(
             execute_code,
@@ -215,6 +231,7 @@ async def orchestrate(
         )
 
         if first_exec.success:
+            phase_tokens["D"] = _token_snapshot() - _tokens_before_d
             yield AgentLogEntry(
                 phase="D",
                 action="complete",
@@ -242,6 +259,8 @@ async def orchestrate(
                     content=f"リトライ {attempt.retry_num}: {attempt.error[:100]}",
                     timestamp=_now_iso(),
                 )
+
+            phase_tokens["D"] = _token_snapshot() - _tokens_before_d
 
             if debug_result.success:
                 python_code = debug_result.final_code
@@ -281,6 +300,7 @@ async def orchestrate(
             "prompt_tokens": int(openai_client.prompt_tokens) if isinstance(openai_client.prompt_tokens, int) else 0,
             "completion_tokens": int(openai_client.completion_tokens) if isinstance(openai_client.completion_tokens, int) else 0,
             "api_calls": int(openai_client.api_calls) if isinstance(openai_client.api_calls, int) else 0,
+            "phase_tokens": phase_tokens,
         },
         ensure_ascii=False,
     )

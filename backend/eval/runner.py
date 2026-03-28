@@ -96,6 +96,7 @@ class EvalRunner:
         api_calls = 0
         phase_starts: dict[str, float] = {}
         phase_durations: dict[str, int] = {}
+        phase_tokens: dict[str, int] = {}
 
         start_ms = time.monotonic_ns() // 1_000_000
 
@@ -156,6 +157,7 @@ class EvalRunner:
                         prompt_tokens = payload.get("prompt_tokens", 0)
                         completion_tokens = payload.get("completion_tokens", 0)
                         api_calls = payload.get("api_calls", 0)
+                        phase_tokens = payload.get("phase_tokens", {})
                     except (json.JSONDecodeError, TypeError):
                         pass
 
@@ -179,6 +181,7 @@ class EvalRunner:
                 completion_tokens=completion_tokens,
                 api_calls=api_calls,
                 phase_durations_ms=phase_durations,
+                phase_tokens=phase_tokens,
                 retry_count=retry_count,
                 code_executes=success,
                 error_category=classify_error(error, agent_log),
