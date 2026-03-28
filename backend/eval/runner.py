@@ -11,10 +11,13 @@ import shutil
 import time
 import uuid
 from pathlib import Path
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 from eval.models import ArchitectureConfig, EvalMetrics, EvalResult, TestCase
 from services.agent_orchestrator import orchestrate
+
+if TYPE_CHECKING:
+    from eval.versioning import RunSnapshot
 
 logger = logging.getLogger(__name__)
 
@@ -204,8 +207,17 @@ class EvalRunner:
                 results.append(result)
         return results
 
-    def save_results(self, results: list[EvalResult], output_dir: Path) -> None:
-        """Save evaluation results to JSON files."""
+    def save_results(
+        self,
+        results: list[EvalResult],
+        output_dir: Path,
+        snapshot: "RunSnapshot | None" = None,
+    ) -> None:
+        """Save evaluation results to JSON files.
+
+        If *snapshot* is provided it is written to ``snapshot.json`` alongside
+        ``summary.json``.
+        """
         output_dir.mkdir(parents=True, exist_ok=True)
 
         for result in results:
@@ -225,3 +237,10 @@ class EvalRunner:
             json.dumps(summary, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+
+        if snapshot is not None:
+            snapshot_path = output_dir / "snapshot.json"
+            snapshot_path.write_text(
+                json.dumps(snapshot.to_dict(), ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )

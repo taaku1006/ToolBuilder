@@ -14,9 +14,10 @@ from pydantic import BaseModel
 
 from core.config import Settings
 from core.deps import get_settings
-from eval.models import load_architecture, load_test_case
-from eval.report import EvalReport
+from eval.models import EvalMetrics, EvalResult, load_architecture, load_test_case
+from eval.report import EvalReport, RunComparison, compare_runs
 from eval.runner import EvalRunner
+from eval.versioning import capture_run_snapshot, diff_snapshots
 
 logger = logging.getLogger(__name__)
 
@@ -184,7 +185,11 @@ async def start_eval_run(
 
             if results:
                 output_dir = _RESULTS_DIR / f"run_{run_id}"
-                runner.save_results(results, output_dir)
+                snapshot = capture_run_snapshot(
+                    prompt_dir=Path(__file__).parent.parent / "prompts",
+                    arch_dir=_ARCHS_DIR,
+                )
+                runner.save_results(results, output_dir, snapshot=snapshot)
                 report = EvalReport(results)
                 report.save(output_dir / "report.json")
                 _run_status[run_id]["report"] = report.to_dict()
@@ -396,3 +401,119 @@ async def delete_test_case(case_id: str) -> None:
         fp.unlink(missing_ok=True)
 
     json_file.unlink()
+
+
+# ---------------------------------------------------------------------------
+# Snapshot endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get("/eval/run/{run_id}/snapshot")
+async def get_run_snapshot(run_id: str) -> dict:
+    """Return the prompt/config snapshot captured for this run."""
+    snapshot_path = _RESULTS_DIR / f"run_{run_id}" / "snapshot.json"
+    if not snapshot_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Snapshot not found for run '{run_id}'",
+        )
+    return json.loads(snapshot_path.read_text(encoding="utf-8"))
+
+
+@router.get("/eval/run/{run_id}/compare/{baseline_id}")
+async def compare_eval_runs(run_id: str, baseline_id: str) -> dict:
+    """Compare two eval runs and return regression/fix analysis.
+
+    Compares *run_id* (current) against *baseline_id* (previous/baseline).
+
+    Returns a dict with keys:
+      - regressions: list of {test_case_id, architecture_id} that flipped pass→fail
+      - fixes: list of {test_case_id, architecture_id} that flipped fail→pass
+      - unchanged_pass: count of pairs that stayed passing
+      - unchanged_fail: count of pairs that stayed failing
+      - new_cases: list of test_case_ids present in current but not in baseline
+    """
+
+    def _load_results(rid: str) -> list[EvalResult]:
+        summary_path = _RESULTS_DIR / f"run_{rid}" / "summary.json"
+        if not summary_path.exists():
+            raise HTTPException(
+                status_code=404,
+                detail=f"Run '{rid}' not found",
+            )
+        raw = json.loads(summary_path.read_text(encoding="utf-8"))
+        results: list[EvalResult] = []
+        for item in raw.get("results", []):
+            m = item.get("metrics", {})
+            results.append(
+                EvalResult(
+                    architecture_id=item["architecture_id"],
+                    test_case_id=item["test_case_id"],
+                    metrics=EvalMetrics(
+                        success=m.get("success", False),
+                        total_duration_ms=m.get("total_duration_ms", 0),
+                        total_tokens=m.get("total_tokens", 0),
+                        prompt_tokens=m.get("prompt_tokens", 0),
+                        completion_tokens=m.get("completion_tokens", 0),
+                        api_calls=m.get("api_calls", 0),
+                        phase_durations_ms=m.get("phase_durations_ms", {}),
+                        phase_tokens=m.get("phase_tokens", {}),
+                        retry_count=m.get("retry_count", 0),
+                        code_executes=m.get("code_executes", False),
+                        error_category=m.get("error_category", "none"),
+                    ),
+                    agent_log=item.get("agent_log", []),
+                    model=item.get("model", "gpt-4o"),
+                    generated_code=item.get("generated_code"),
+                    error=item.get("error"),
+                )
+            )
+        return results
+
+    current = _load_results(run_id)
+    baseline = _load_results(baseline_id)
+
+    comparison: RunComparison = compare_runs(current, baseline)
+    return {
+        "regressions": comparison.regressions,
+        "fixes": comparison.fixes,
+        "unchanged_pass": comparison.unchanged_pass,
+        "unchanged_fail": comparison.unchanged_fail,
+        "new_cases": comparison.new_cases,
+    }
+
+
+@router.get("/eval/run/{run_id}/diff/{other_id}")
+async def diff_run_snapshots(run_id: str, other_id: str) -> dict:
+    """Return the diff between two run snapshots.
+
+    Compares the snapshot of *run_id* (snapshot a) against *other_id* (snapshot b).
+    """
+    _prompts_dir = Path(__file__).parent.parent / "prompts"
+
+    def _load_snapshot(rid: str):
+        path = _RESULTS_DIR / f"run_{rid}" / "snapshot.json"
+        if not path.exists():
+            raise HTTPException(
+                status_code=404,
+                detail=f"Snapshot not found for run '{rid}'",
+            )
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        from eval.versioning import RunSnapshot
+        return RunSnapshot(
+            prompt_hashes=raw["prompt_hashes"],
+            prompt_contents=raw["prompt_contents"],
+            architecture_configs=raw["architecture_configs"],
+            snapshot_hash=raw["snapshot_hash"],
+        )
+
+    snap_a = _load_snapshot(run_id)
+    snap_b = _load_snapshot(other_id)
+    diff = diff_snapshots(snap_a, snap_b)
+    return {
+        "run_id": run_id,
+        "other_id": other_id,
+        "changed_prompts": diff.changed_prompts,
+        "changed_configs": diff.changed_configs,
+        "is_identical": diff.is_identical,
+    }

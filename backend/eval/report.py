@@ -7,11 +7,103 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import math
 
 from eval.models import EvalResult
+
+
+# ---------------------------------------------------------------------------
+# Run-to-run regression detection
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class RunComparison:
+    """Result of comparing two evaluation runs.
+
+    Attributes:
+        regressions: Cases that flipped pass→fail. Each entry is
+            ``{"test_case_id": str, "architecture_id": str}``.
+        fixes: Cases that flipped fail→pass. Same structure as regressions.
+        unchanged_pass: Count of (arch, case) pairs that stayed passing.
+        unchanged_fail: Count of (arch, case) pairs that stayed failing.
+        new_cases: test_case_ids present in the current run but not in the
+            previous run (across any architecture).
+    """
+
+    regressions: list[dict] = field(default_factory=list)
+    fixes: list[dict] = field(default_factory=list)
+    unchanged_pass: int = 0
+    unchanged_fail: int = 0
+    new_cases: list[str] = field(default_factory=list)
+
+
+def compare_runs(
+    current_results: list[EvalResult],
+    previous_results: list[EvalResult],
+) -> RunComparison:
+    """Compare two evaluation runs and return a RunComparison.
+
+    Matching is done on ``(architecture_id, test_case_id)`` pairs.
+    If a pair appears multiple times in a list the last occurrence wins.
+
+    Args:
+        current_results: Results from the newer run.
+        previous_results: Results from the baseline run.
+
+    Returns:
+        RunComparison describing regressions, fixes, and unchanged counts.
+    """
+    # Build lookup: (arch_id, case_id) -> success for each run.
+    def _index(results: list[EvalResult]) -> dict[tuple[str, str], bool]:
+        index: dict[tuple[str, str], bool] = {}
+        for r in results:
+            index[(r.architecture_id, r.test_case_id)] = r.metrics.success
+        return index
+
+    current_index = _index(current_results)
+    previous_index = _index(previous_results)
+
+    # Determine which test_case_ids existed in the previous run.
+    previous_case_ids: set[str] = {case_id for _, case_id in previous_index}
+
+    regressions: list[dict] = []
+    fixes: list[dict] = []
+    unchanged_pass = 0
+    unchanged_fail = 0
+    new_case_ids: set[str] = set()
+
+    for (arch_id, case_id), current_success in current_index.items():
+        key = (arch_id, case_id)
+        if key not in previous_index:
+            # This exact (arch, case) pair is new.
+            # Track as new_case only when the case_id itself is absent from previous.
+            if case_id not in previous_case_ids:
+                new_case_ids.add(case_id)
+            # Either way, don't count it in regression/fix/unchanged.
+            continue
+
+        previous_success = previous_index[key]
+
+        if previous_success and not current_success:
+            regressions.append({"test_case_id": case_id, "architecture_id": arch_id})
+        elif not previous_success and current_success:
+            fixes.append({"test_case_id": case_id, "architecture_id": arch_id})
+        elif current_success:
+            unchanged_pass += 1
+        else:
+            unchanged_fail += 1
+
+    return RunComparison(
+        regressions=regressions,
+        fixes=fixes,
+        unchanged_pass=unchanged_pass,
+        unchanged_fail=unchanged_fail,
+        new_cases=sorted(new_case_ids),
+    )
 
 
 def _wilson_ci(successes: int, n: int, z: float = 1.96) -> tuple[float, float]:
