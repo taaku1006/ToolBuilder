@@ -14,6 +14,7 @@ export interface EvalTestCase {
   task: string
   description: string
   file_path: string | null
+  expected_file_path: string | null
   expected_success: boolean
 }
 
@@ -96,11 +97,13 @@ export async function createTestCase(
   task: string,
   description: string,
   file?: File,
+  expectedFile?: File,
 ): Promise<EvalTestCase> {
   const form = new FormData()
   form.append('task', task)
   form.append('description', description)
   if (file) form.append('file', file)
+  if (expectedFile) form.append('expected_file', expectedFile)
   const res = await client.post<EvalTestCase>('/eval/test-cases', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })

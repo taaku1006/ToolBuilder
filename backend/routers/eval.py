@@ -53,6 +53,7 @@ class TestCaseOut(BaseModel):
     task: str
     description: str
     file_path: str | None
+    expected_file_path: str | None = None
     expected_success: bool
 
 
@@ -124,6 +125,7 @@ async def list_test_cases() -> list[TestCaseOut]:
             task=c.task,
             description=c.description,
             file_path=c.file_path,
+            expected_file_path=getattr(c, "expected_file_path", None),
             expected_success=c.expected_success,
         )
         for c in cases
@@ -300,12 +302,13 @@ async def create_test_case(
     task: str = Form(...),
     description: str = Form(""),
     file: UploadFile | None = FastAPIFile(default=None),
+    expected_file: UploadFile | None = FastAPIFile(default=None),
 ) -> TestCaseOut:
-    """Create a new test case (with optional file upload).
+    """Create a new test case (with optional input file and expected output file).
 
     Saves the test case as a JSON file in the eval test_cases directory.
-    If a file is uploaded, it is saved to eval/test_cases/files/ and
-    the path is recorded in the test case JSON.
+    If files are uploaded, they are saved to eval/test_cases/files/ and
+    the paths are recorded in the test case JSON.
     """
     stripped_task = task.strip()
     if not stripped_task:
@@ -313,7 +316,12 @@ async def create_test_case(
 
     case_id = str(uuid.uuid4())
     file_path: str | None = None
+    expected_file_path: str | None = None
 
+    files_dir = _CASES_DIR / "files"
+    files_dir.mkdir(parents=True, exist_ok=True)
+
+    # Save input file
     if file is not None:
         filename = file.filename or ""
         ext = Path(filename).suffix.lower()
@@ -325,21 +333,36 @@ async def create_test_case(
                     f"Allowed: {', '.join(sorted(_ALLOWED_EVAL_EXTENSIONS))}"
                 ),
             )
-
-        files_dir = _CASES_DIR / "files"
-        files_dir.mkdir(parents=True, exist_ok=True)
-
-        safe_name = f"{case_id}{ext}"
+        safe_name = f"{case_id}_input{ext}"
         dest = files_dir / safe_name
         content = await file.read()
         dest.write_bytes(content)
         file_path = str(dest)
+
+    # Save expected output file
+    if expected_file is not None:
+        filename = expected_file.filename or ""
+        ext = Path(filename).suffix.lower()
+        if ext not in _ALLOWED_EVAL_EXTENSIONS:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Unsupported expected file type '{ext}'. "
+                    f"Allowed: {', '.join(sorted(_ALLOWED_EVAL_EXTENSIONS))}"
+                ),
+            )
+        safe_name = f"{case_id}_expected{ext}"
+        dest = files_dir / safe_name
+        content = await expected_file.read()
+        dest.write_bytes(content)
+        expected_file_path = str(dest)
 
     case_data = {
         "id": case_id,
         "task": stripped_task,
         "description": description,
         "file_path": file_path,
+        "expected_file_path": expected_file_path,
         "expected_success": True,
     }
 
@@ -352,6 +375,7 @@ async def create_test_case(
         task=stripped_task,
         description=description,
         file_path=file_path,
+        expected_file_path=expected_file_path,
         expected_success=True,
     )
 

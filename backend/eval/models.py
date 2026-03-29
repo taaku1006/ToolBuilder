@@ -59,6 +59,7 @@ class TestCase:
     task: str
     description: str
     file_path: str | None = None
+    expected_file_path: str | None = None
     expected_success: bool = True
 
 
@@ -137,5 +138,6 @@ def load_test_case(path: Path) -> TestCase:
         task=data["task"],
         description=data.get("description", ""),
         file_path=data.get("file_path"),
+        expected_file_path=data.get("expected_file_path"),
         expected_success=data.get("expected_success", True),
     )
