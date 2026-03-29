@@ -370,5 +370,18 @@ async def orchestrate(
                 timestamp=_now_iso(),
             )
 
+    # Register scores on the Langfuse trace
+    _total_tokens = int(openai_client.total_tokens) if isinstance(openai_client.total_tokens, int) else 0
+    _prompt_tokens = int(openai_client.prompt_tokens) if isinstance(openai_client.prompt_tokens, int) else 0
+    _completion_tokens = int(openai_client.completion_tokens) if isinstance(openai_client.completion_tokens, int) else 0
+    trace.score_eval_result(
+        success=exec_succeeded,
+        retries=debug_retries,
+        cost_usd=(_prompt_tokens / 1_000_000) * 2.50 + (_completion_tokens / 1_000_000) * 10.00,
+        duration_ms=0,  # Not tracked at orchestrate level
+        error_category="none" if exec_succeeded else "runtime_error",
+        total_tokens=_total_tokens,
+    )
+
     trace.end_trace(output={"success": exec_succeeded, "debug_retries": debug_retries})
     trace.flush()

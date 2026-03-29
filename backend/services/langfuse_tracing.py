@@ -111,6 +111,41 @@ class OrchestrationTrace:
         except Exception:
             logger.warning("Failed to log Langfuse generation", exc_info=True)
 
+    def score(self, name: str, value: float | str, comment: str | None = None, data_type: str | None = None) -> None:
+        """Register a score on the current trace."""
+        if self._trace is None or self._lf is None:
+            return
+        try:
+            kwargs: dict[str, Any] = {
+                "trace_id": self._trace.id,
+                "name": name,
+                "value": value,
+            }
+            if comment:
+                kwargs["comment"] = comment
+            if data_type:
+                kwargs["data_type"] = data_type
+            self._lf.score(**kwargs)
+        except Exception:
+            logger.warning("Failed to register Langfuse score", exc_info=True)
+
+    def score_eval_result(
+        self,
+        success: bool,
+        retries: int,
+        cost_usd: float,
+        duration_ms: int,
+        error_category: str,
+        total_tokens: int,
+    ) -> None:
+        """Register all eval metrics as scores on the trace."""
+        self.score("success", 1.0 if success else 0.0, data_type="BOOLEAN")
+        self.score("retries", float(retries), data_type="NUMERIC")
+        self.score("cost_usd", cost_usd, data_type="NUMERIC")
+        self.score("duration_ms", float(duration_ms), data_type="NUMERIC")
+        self.score("total_tokens", float(total_tokens), data_type="NUMERIC")
+        self.score("error_category", error_category, data_type="CATEGORICAL")
+
     def end_trace(self, output: Any = None) -> None:
         """Finalize the trace."""
         if self._trace is None:
@@ -121,6 +156,11 @@ class OrchestrationTrace:
             )
         except Exception:
             logger.warning("Failed to end Langfuse trace", exc_info=True)
+
+    @property
+    def trace_id(self) -> str | None:
+        """Return the trace ID, or None if no trace."""
+        return self._trace.id if self._trace else None
 
     def flush(self) -> None:
         """Flush pending events to Langfuse."""
