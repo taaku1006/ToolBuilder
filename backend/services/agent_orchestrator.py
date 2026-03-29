@@ -102,6 +102,10 @@ async def orchestrate(
         },
     )
 
+    # Set settings ref so prompt_manager can access Langfuse config
+    from services.reflection_engine import set_settings_ref
+    set_settings_ref(settings)
+
     openai_client = OpenAIClient(settings)
     file_context = _resolve_file_context(file_id, settings)
     trace = OrchestrationTrace(settings, task, metadata={
@@ -369,6 +373,20 @@ async def orchestrate(
                 ),
                 timestamp=_now_iso(),
             )
+
+    # LLM-as-Judge evaluation (only when Langfuse is enabled and code was generated)
+    if settings.langfuse_enabled and exec_succeeded and python_code:
+        try:
+            from services.llm_judge import evaluate_and_score
+
+            evaluate_and_score(
+                task=task,
+                code=python_code,
+                settings=settings,
+                trace=trace,
+            )
+        except Exception:
+            logger.warning("LLM judge evaluation failed", exc_info=True)
 
     # Register scores on the Langfuse trace
     _total_tokens = int(openai_client.total_tokens) if isinstance(openai_client.total_tokens, int) else 0

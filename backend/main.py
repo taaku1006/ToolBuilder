@@ -30,6 +30,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Application starting", extra={"database_url": settings.database_url})
     init_engine(settings.database_url)
     await create_tables()
+    # Seed prompts into Langfuse if enabled
+    if settings.langfuse_enabled:
+        from services.prompt_manager import seed_prompts
+        seed_prompts(settings)
     yield
     logger.info("Application shutdown")
 

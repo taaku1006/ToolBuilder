@@ -55,7 +55,16 @@ class DebugResult:
 
 
 def _load_debug_prompt() -> str:
-    """Load the Phase D debug prompt template from disk."""
+    """Load the Phase D debug prompt template."""
+    try:
+        from services.reflection_engine import _settings_ref
+
+        if _settings_ref is not None:
+            from services.prompt_manager import get_prompt
+
+            return get_prompt("phase_d_debug", _settings_ref)
+    except Exception:
+        pass
     prompt_path = _PROMPTS_DIR / "phase_d_debug.txt"
     return prompt_path.read_text(encoding="utf-8")
 
