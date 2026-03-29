@@ -159,9 +159,10 @@ async def orchestrate(
             timestamp=_now_iso(),
         )
 
-        # ------------------------------------------------------------------
-        # Phase B — reflection / tool synthesis
-        # ------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # Phase B — reflection / tool synthesis (independent from A)
+    # ------------------------------------------------------------------
+    if file_id and settings.reflection_phase_enabled:
         trace.start_phase("B")
         yield AgentLogEntry(
             phase="B",

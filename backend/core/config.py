@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     log_format: str = "json"  # "json" or "text"
 
     reflection_enabled: bool = True
+    reflection_phase_enabled: bool = True
     reflection_max_steps: int = 3
     tools_dir: str = "./tools"
 

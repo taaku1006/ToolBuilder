@@ -17,6 +17,7 @@ from core.config import Settings
 
 def _make_settings(
     reflection_enabled: bool = True,
+    reflection_phase_enabled: bool = True,
     debug_loop_enabled: bool = False,
 ) -> Settings:
     return Settings(
@@ -24,6 +25,7 @@ def _make_settings(
         openai_model="gpt-4o",
         cors_origins="http://localhost:5173",
         reflection_enabled=reflection_enabled,
+        reflection_phase_enabled=reflection_phase_enabled,
         debug_loop_enabled=debug_loop_enabled,
     )
 
@@ -330,7 +332,7 @@ class TestOrchestrateWithFile:
         """With REFLECTION_ENABLED=false, Phase A and B are skipped."""
         from services.agent_orchestrator import orchestrate
 
-        settings = _make_settings(reflection_enabled=False)
+        settings = _make_settings(reflection_enabled=False, reflection_phase_enabled=False)
 
         with patch("services.agent_orchestrator.OpenAIClient") as mock_cls:
             mock_instance = MagicMock()

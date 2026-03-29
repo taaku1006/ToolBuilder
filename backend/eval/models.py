@@ -37,11 +37,13 @@ class ArchitectureConfig:
 
     def to_settings_overrides(self) -> dict:
         """Return a dict of Settings field overrides derived from this config."""
-        has_reflection = "A" in self.phases or "B" in self.phases
+        has_exploration = "A" in self.phases
+        has_reflection_b = "B" in self.phases
         has_debug = "D" in self.phases
         has_skills = "E" in self.phases
         return {
-            "reflection_enabled": has_reflection,
+            "reflection_enabled": has_exploration,
+            "reflection_phase_enabled": has_reflection_b,
             "debug_loop_enabled": has_debug,
             "skills_enabled": has_skills,
             "openai_model": self.model,
