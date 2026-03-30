@@ -49,3 +49,15 @@ frontend/dist/
 .DS_Store
 Thumbs.db
 *:Zone.Identifier
+
+# Claude Code
+.claude/
+
+# Temp files
+CODEMAP_VERIFICATION.txt
+
+# Excel data files
+*.xlsx
+
+# Langfuse (separate repo clone)
+langfuse/
