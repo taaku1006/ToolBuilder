@@ -1,7 +1,1 @@
-{
-  "id": "v7_planner_retry5",
-  "phases": ["A", "B", "P", "C", "D", "F", "E"],
-  "model": "gpt-4o",
-  "debug_retry_limit": 5,
-  "description": "Planner + 5 retries: maximum effort for complex tasks"
-}
+{"id":"v7_planner_retry5","pipeline":{"explore":true,"reflect":true,"decompose":true,"debug_retry_limit":5,"eval_debug":true,"eval_retry_strategy":"replan","eval_retry_max_loops":2,"subtask_debug_retries":3},"model":"gpt-4o","description":"Planner + D5 + replan"}

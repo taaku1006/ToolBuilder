@@ -46,6 +46,7 @@ class ArchitectureOut(BaseModel):
     debug_retry_limit: int
     temperature: float
     description: str
+    pipeline: dict | None = None
 
 
 class TestCaseOut(BaseModel):
@@ -111,6 +112,16 @@ async def list_architectures() -> list[ArchitectureOut]:
             debug_retry_limit=a.debug_retry_limit,
             temperature=a.temperature,
             description=a.description,
+            pipeline={
+                "explore": a.pipeline.explore,
+                "reflect": a.pipeline.reflect,
+                "decompose": a.pipeline.decompose,
+                "debug_retry_limit": a.pipeline.debug_retry_limit,
+                "eval_debug": a.pipeline.eval_debug,
+                "eval_retry_strategy": a.pipeline.eval_retry_strategy,
+                "eval_retry_max_loops": a.pipeline.eval_retry_max_loops,
+                "subtask_debug_retries": a.pipeline.subtask_debug_retries,
+            } if a.pipeline else None,
         )
         for a in archs
     ]

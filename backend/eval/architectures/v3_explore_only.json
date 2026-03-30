@@ -1,7 +1,1 @@
-{
-  "id": "v3_explore_only",
-  "phases": ["A", "C", "D", "F", "E"],
-  "model": "gpt-4o",
-  "debug_retry_limit": 3,
-  "description": "Explore + generate (skip Phase B reflection)"
-}
+{"id":"v3_explore_only","pipeline":{"explore":true,"reflect":false,"decompose":false,"debug_retry_limit":3,"eval_debug":true,"eval_retry_strategy":"none"},"model":"gpt-4o","description":"Explore only, skip reflection"}

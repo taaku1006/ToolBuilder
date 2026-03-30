@@ -1,7 +1,0 @@
-{
-  "id": "v2_skip_b",
-  "phases": ["A", "C", "D", "E"],
-  "model": "gpt-4o",
-  "debug_retry_limit": 3,
-  "description": "Skip Phase B (reflection)"
-}

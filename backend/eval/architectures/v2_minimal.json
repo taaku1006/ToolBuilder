@@ -1,7 +1,1 @@
-{
-  "id": "v2_minimal",
-  "phases": ["C", "D", "F"],
-  "model": "gpt-4o",
-  "debug_retry_limit": 3,
-  "description": "Minimal: code gen + debug only, no file exploration"
-}
+{"id":"v2_minimal","pipeline":{"explore":false,"reflect":false,"decompose":false,"debug_retry_limit":3,"eval_debug":true,"eval_retry_strategy":"none"},"model":"gpt-4o","description":"No exploration, minimal pipeline"}
