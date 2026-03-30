@@ -1,5 +1,16 @@
 import client from './client'
 
+export interface PipelineConfig {
+  explore: boolean
+  reflect: boolean
+  decompose: boolean
+  debug_retry_limit: number
+  eval_debug: boolean
+  eval_retry_strategy: 'none' | 'restart' | 'replan'
+  eval_retry_max_loops: number
+  subtask_debug_retries: number
+}
+
 export interface Architecture {
   id: string
   phases: string[]
@@ -7,6 +18,7 @@ export interface Architecture {
   debug_retry_limit: number
   temperature: number
   description: string
+  pipeline: PipelineConfig | null
 }
 
 export interface EvalTestCase {

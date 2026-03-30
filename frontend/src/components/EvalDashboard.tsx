@@ -62,57 +62,160 @@ function PhaseTag({ phase }: { phase: string }) {
   )
 }
 
+function FlowBlock({
+  label,
+  phase,
+  active,
+  children,
+}: {
+  label: string
+  phase?: string
+  active: boolean
+  children?: React.ReactNode
+}) {
+  const info = phase ? PHASE_INFO[phase] : null
+  return (
+    <div
+      className={`border rounded-lg px-3 py-2 text-xs ${
+        active
+          ? `${info?.color ?? 'bg-gray-700 text-gray-300'} border-gray-600`
+          : 'bg-gray-800/30 text-gray-600 border-gray-700/50 opacity-50'
+      }`}
+    >
+      <div className="font-mono font-medium">{label}</div>
+      {children && <div className="mt-1 font-sans">{children}</div>}
+    </div>
+  )
+}
+
+function FlowArrow({ label }: { label?: string }) {
+  return (
+    <div className="flex flex-col items-center py-0.5">
+      <div className="w-px h-3 bg-gray-600" />
+      <div className="text-gray-600 text-[10px]">▼{label ? ` ${label}` : ''}</div>
+    </div>
+  )
+}
+
 function ArchDetailPanel({ arch }: { arch: Architecture }) {
-  const allPhases = ['A', 'B', 'C', 'D', 'E']
+  const p = arch.pipeline
+
+  // Fallback for legacy phases-only configs
+  if (!p) {
+    const allPhases = ['A', 'B', 'C', 'D', 'F', 'E']
+    return (
+      <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-2">
+        <div className="font-mono text-sm text-white">{arch.id}</div>
+        <div className="text-xs text-gray-500">{arch.description}</div>
+        <div className="flex items-center gap-1">
+          {allPhases.map((ph, i) => (
+            <div key={ph} className="flex items-center">
+              {i > 0 && <span className="mx-1 text-xs text-gray-600">→</span>}
+              <PhaseTag phase={ph} />
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <div>
-          <span className="font-mono text-sm text-white">{arch.id}</span>
-          <span className="text-xs text-gray-500 ml-3">{arch.model} / temp:{arch.temperature} / retry:{arch.debug_retry_limit}</span>
-        </div>
+        <span className="font-mono text-sm text-white">{arch.id}</span>
+        <span className="text-xs text-gray-500">{arch.model} / retry:{p.debug_retry_limit}</span>
       </div>
-      {arch.description && (
-        <div className="text-sm text-gray-300">{arch.description}</div>
-      )}
-      <div className="space-y-1.5">
-        <div className="text-xs text-gray-500 uppercase tracking-wide">Pipeline</div>
-        <div className="flex items-center gap-1">
-          {allPhases.map((p, i) => {
-            const active = arch.phases.includes(p)
-            const info = PHASE_INFO[p]
-            return (
-              <div key={p} className="flex items-center">
-                {i > 0 && (
-                  <span className={`mx-1 text-xs ${active ? 'text-gray-500' : 'text-gray-700'}`}>→</span>
-                )}
-                <span
-                  className={`px-2 py-1 rounded text-xs font-mono ${
-                    active
-                      ? info?.color ?? 'bg-gray-700 text-gray-300'
-                      : 'bg-gray-800 text-gray-600 line-through'
-                  }`}
-                >
-                  {p}
-                </span>
-              </div>
-            )
-          })}
+      {arch.description && <div className="text-xs text-gray-400">{arch.description}</div>}
+
+      {/* Flow chart */}
+      <div className="flex flex-col items-start gap-0">
+        {/* Row 1: Explore + Reflect */}
+        <div className="flex items-center gap-2">
+          <FlowBlock label="A: Explore" phase="A" active={p.explore}>
+            <span>Excel構造分析</span>
+          </FlowBlock>
+          <span className="text-gray-600 text-xs">→</span>
+          <FlowBlock label="B: Reflect" phase="B" active={p.reflect}>
+            <span>ツール必要性判断</span>
+          </FlowBlock>
         </div>
-      </div>
-      <div className="space-y-1">
-        {allPhases.map((p) => {
-          const active = arch.phases.includes(p)
-          const info = PHASE_INFO[p]
-          if (!info) return null
-          return (
-            <div key={p} className={`flex items-start gap-2 text-xs ${active ? 'text-gray-300' : 'text-gray-600 line-through'}`}>
-              <PhaseTag phase={p} />
-              <span>{info.description}</span>
-              {!active && <span className="text-gray-600 no-underline ml-1">(skip)</span>}
+
+        <FlowArrow />
+
+        {/* Row 2: Code Gen + Debug (or Planner loop) */}
+        {p.decompose ? (
+          <div className="border border-dashed border-yellow-700/50 rounded-lg p-2 w-full relative">
+            <div className="text-[10px] text-yellow-400 font-mono absolute -top-2 left-2 bg-gray-800 px-1">
+              P: Task Decomposition
             </div>
-          )
-        })}
+            <div className="flex items-center gap-2 mt-1">
+              <FlowBlock label="P: Plan" phase="C" active>
+                <span>タスク分解</span>
+              </FlowBlock>
+              <span className="text-gray-600 text-xs">→</span>
+              <div className="border border-gray-600 rounded px-2 py-1.5 bg-gray-900/50">
+                <div className="text-[10px] text-gray-400 font-mono mb-1">for each subtask:</div>
+                <div className="flex items-center gap-1">
+                  <FlowBlock label="C.n" phase="C" active>
+                    <span>生成</span>
+                  </FlowBlock>
+                  <span className="text-gray-600 text-[10px]">→</span>
+                  <FlowBlock label="D.n" phase="D" active>
+                    <span>Debug x{p.subtask_debug_retries}</span>
+                  </FlowBlock>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <FlowBlock label="C: Generate" phase="C" active>
+              <span>コード生成</span>
+            </FlowBlock>
+            <span className="text-gray-600 text-xs">→</span>
+            <FlowBlock label="D: Debug" phase="D" active>
+              <span>自律修正 x{p.debug_retry_limit}</span>
+            </FlowBlock>
+          </div>
+        )}
+
+        <FlowArrow />
+
+        {/* Row 3: Eval Debug (Phase F) */}
+        <div className="relative w-full">
+          <FlowBlock label="F: Quality Check" phase="E" active={p.eval_debug}>
+            <span>
+              正解 Excel 比較
+              {p.eval_debug && p.eval_retry_strategy !== 'none' && (
+                <span className="ml-1 text-yellow-400">
+                  ({p.eval_retry_strategy} x{p.eval_retry_max_loops})
+                </span>
+              )}
+            </span>
+          </FlowBlock>
+          {/* Replan loop arrow */}
+          {p.eval_debug && p.eval_retry_strategy === 'replan' && (
+            <div className="absolute -right-1 top-1/2 -translate-y-1/2 flex items-center">
+              <div className="text-yellow-500 text-[10px] whitespace-nowrap ml-2">
+                ↺ 失敗時 P に再計画
+              </div>
+            </div>
+          )}
+          {p.eval_debug && p.eval_retry_strategy === 'restart' && (
+            <div className="absolute -right-1 top-1/2 -translate-y-1/2 flex items-center">
+              <div className="text-orange-500 text-[10px] whitespace-nowrap ml-2">
+                ↺ 失敗時 全やり直し
+              </div>
+            </div>
+          )}
+        </div>
+
+        <FlowArrow />
+
+        {/* Row 4: Skills */}
+        <FlowBlock label="E: Skills" phase="E" active={p.skills ?? true}>
+          <span>スキル保存提案</span>
+        </FlowBlock>
       </div>
     </div>
   )
@@ -466,12 +569,36 @@ function SummaryTable({ report, archs }: { report: EvalReport; archs: Architectu
                   {arch && (
                     <div className="mt-1">
                       <div className="text-xs text-gray-500">{arch.description}</div>
-                      <div className="flex items-center gap-1.5 mt-1">
-                        {arch.phases.map((p) => (
-                          <PhaseTag key={p} phase={p} />
-                        ))}
-                        <span className="text-xs text-gray-600 ml-1">{arch.model}</span>
-                      </div>
+                      {arch.pipeline ? (
+                        <div className="flex items-center gap-1 mt-1 flex-wrap">
+                          {arch.pipeline.explore && <PhaseTag phase="A" />}
+                          {arch.pipeline.reflect && <PhaseTag phase="B" />}
+                          {arch.pipeline.decompose && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-900/50 text-yellow-300 font-mono">
+                              P→[C.n→D.n]
+                            </span>
+                          )}
+                          {!arch.pipeline.decompose && (
+                            <>
+                              <PhaseTag phase="C" />
+                              <PhaseTag phase="D" />
+                            </>
+                          )}
+                          {arch.pipeline.eval_debug && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-pink-900/50 text-pink-300 font-mono">
+                              F{arch.pipeline.eval_retry_strategy !== 'none' ? `↺${arch.pipeline.eval_retry_strategy}` : ''}
+                            </span>
+                          )}
+                          <span className="text-xs text-gray-600 ml-1">{arch.model}</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 mt-1">
+                          {arch.phases.map((p) => (
+                            <PhaseTag key={p} phase={p} />
+                          ))}
+                          <span className="text-xs text-gray-600 ml-1">{arch.model}</span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </td>
@@ -829,13 +956,35 @@ export function EvalDashboard() {
                   <button onClick={() => toggleArch(a.id)} className="flex-1 text-left">
                     <div className="font-mono text-xs text-gray-200">{a.id}</div>
                     <div className="text-xs text-gray-500 mt-1">{a.description}</div>
-                    <div className="flex gap-1 mt-2">
-                      {a.phases.map((p) => (
-                        <PhaseTag key={p} phase={p} />
-                      ))}
-                    </div>
+                    {a.pipeline ? (
+                      <div className="flex gap-1 mt-2 flex-wrap">
+                        {a.pipeline.explore && <PhaseTag phase="A" />}
+                        {a.pipeline.reflect && <PhaseTag phase="B" />}
+                        {a.pipeline.decompose ? (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-900/50 text-yellow-300 font-mono">
+                            P→[C.n→D.n]
+                          </span>
+                        ) : (
+                          <>
+                            <PhaseTag phase="C" />
+                            <PhaseTag phase="D" />
+                          </>
+                        )}
+                        {a.pipeline.eval_debug && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-pink-900/50 text-pink-300 font-mono">
+                            F{a.pipeline.eval_retry_strategy !== 'none' ? `↺${a.pipeline.eval_retry_strategy}` : ''}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex gap-1 mt-2">
+                        {a.phases.map((p) => (
+                          <PhaseTag key={p} phase={p} />
+                        ))}
+                      </div>
+                    )}
                     <div className="text-xs text-gray-600 mt-1">
-                      {a.model} / retry:{a.debug_retry_limit}
+                      {a.model} / retry:{a.pipeline?.debug_retry_limit ?? a.debug_retry_limit}
                     </div>
                   </button>
                   <button
