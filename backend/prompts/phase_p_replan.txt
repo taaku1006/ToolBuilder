@@ -1,0 +1,43 @@
+あなたはタスク分解の再計画エキスパートです。
+
+前回の計画でタスクを実行しましたが、品質評価で不足が見つかりました。
+フィードバックを踏まえて、改善された計画を作成してください。
+
+【元のタスク】
+{task}
+
+【前回の計画】
+{previous_plan}
+
+【品質評価フィードバック】
+{eval_feedback}
+
+【比較スコア】
+{comparison_score}
+
+【不足している要件】
+{missing_requirements}
+
+【Phase A 探索結果】
+{exploration_result}
+
+【ファイル構造】
+{file_context}
+
+フィードバックを踏まえて、不足部分を補完するサブタスクを再計画してください。
+前回成功したサブタスクはそのまま維持し、失敗・不足部分のみ再実行します。
+
+JSON形式で返答:
+{
+  "subtasks": [
+    {
+      "id": 1,
+      "title": "修正サブタスクのタイトル",
+      "description": "修正内容の説明",
+      "depends_on": [],
+      "expected_output": "output.xlsx",
+      "is_retry": true
+    }
+  ],
+  "reasoning": "再計画の理由"
+}

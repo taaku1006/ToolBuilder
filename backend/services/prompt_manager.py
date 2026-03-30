@@ -26,6 +26,8 @@ PROMPT_FILES = {
     "phase_d_debug": "phase_d_debug.txt",
     "phase_p_plan": "phase_p_plan.txt",
     "phase_p_subtask": "phase_p_subtask.txt",
+    "phase_p_replan": "phase_p_replan.txt",
+    "phase_c_subtask": "phase_c_subtask.txt",
     "eval_agent": "eval_agent.txt",
     "phase_f_eval_debug": "phase_f_eval_debug.txt",
 }

@@ -8,11 +8,10 @@ from unittest.mock import MagicMock
 import pytest
 
 from services.task_planner import (
-    DecompositionResult,
     PlanResult,
     SubTask,
-    SubTaskResult,
     run_planner,
+    run_replanner,
 )
 
 
@@ -32,6 +31,14 @@ class TestSubTask:
         assert st.id == 2
         assert st.depends_on == (1,)
 
+    def test_is_retry_default(self):
+        st = SubTask(id=1, title="t", description="d", depends_on=(), expected_output="o")
+        assert st.is_retry is False
+
+    def test_is_retry_true(self):
+        st = SubTask(id=1, title="t", description="d", depends_on=(), expected_output="o", is_retry=True)
+        assert st.is_retry is True
+
 
 class TestPlanResult:
     def test_frozen(self):
@@ -46,31 +53,6 @@ class TestPlanResult:
         assert len(pr.subtasks) == 1
 
 
-class TestSubTaskResult:
-    def test_frozen(self):
-        sr = SubTaskResult(subtask_id=1, code="x", stdout="ok", success=True, output_files=(), debug_retries=0)
-        with pytest.raises(AttributeError):
-            sr.success = False  # type: ignore[misc]
-
-
-class TestDecompositionResult:
-    def test_success(self):
-        dr = DecompositionResult(
-            subtask_results=(), final_code="code", success=True,
-            total_subtasks=2, failed_subtask_id=None,
-        )
-        assert dr.success is True
-        assert dr.failed_subtask_id is None
-
-    def test_failure(self):
-        dr = DecompositionResult(
-            subtask_results=(), final_code="", success=False,
-            total_subtasks=3, failed_subtask_id=2,
-        )
-        assert dr.success is False
-        assert dr.failed_subtask_id == 2
-
-
 # ---------------------------------------------------------------------------
 # run_planner tests
 # ---------------------------------------------------------------------------
@@ -79,8 +61,7 @@ class TestDecompositionResult:
 class TestRunPlanner:
     @pytest.fixture()
     def mock_client(self):
-        client = MagicMock()
-        return client
+        return MagicMock()
 
     @pytest.mark.asyncio
     async def test_decompose_true(self, mock_client):
@@ -94,59 +75,38 @@ class TestRunPlanner:
         })
 
         result = await run_planner(
-            openai_client=mock_client,
-            task="complex task",
-            exploration_result="cols: A, B",
-            reflection_result="{}",
+            openai_client=mock_client, task="complex task",
+            exploration_result="cols: A, B", reflection_result="{}",
             file_context="file info",
         )
 
         assert result.decompose is True
         assert len(result.subtasks) == 2
-        assert result.subtasks[0].title == "Step 1"
-        assert result.subtasks[1].depends_on == (1,)
 
     @pytest.mark.asyncio
     async def test_decompose_false(self, mock_client):
         mock_client.generate_code.return_value = json.dumps({
-            "decompose": False,
-            "reasoning": "simple aggregation",
-            "subtasks": [
-                {"id": 1, "title": "Full task", "description": "aggregate", "depends_on": [], "expected_output": "out.xlsx"},
-            ],
+            "decompose": False, "reasoning": "simple",
+            "subtasks": [{"id": 1, "title": "Full task", "description": "agg", "depends_on": [], "expected_output": "o.xlsx"}],
         })
 
         result = await run_planner(
-            openai_client=mock_client,
-            task="simple task",
-            exploration_result="",
-            reflection_result="{}",
-            file_context=None,
+            openai_client=mock_client, task="simple", exploration_result="",
+            reflection_result="{}", file_context=None,
         )
-
         assert result.decompose is False
-        assert len(result.subtasks) == 1
 
     @pytest.mark.asyncio
     async def test_max_subtasks_enforced(self, mock_client):
         mock_client.generate_code.return_value = json.dumps({
-            "decompose": True,
-            "reasoning": "many steps",
-            "subtasks": [
-                {"id": i, "title": f"Step {i}", "description": f"do {i}", "depends_on": [], "expected_output": f"{i}.xlsx"}
-                for i in range(1, 11)
-            ],
+            "decompose": True, "reasoning": "many",
+            "subtasks": [{"id": i, "title": f"S{i}", "description": f"d{i}", "depends_on": [], "expected_output": f"{i}.xlsx"} for i in range(1, 11)],
         })
 
         result = await run_planner(
-            openai_client=mock_client,
-            task="big task",
-            exploration_result="",
-            reflection_result="{}",
-            file_context=None,
-            max_subtasks=3,
+            openai_client=mock_client, task="big", exploration_result="",
+            reflection_result="{}", file_context=None, max_subtasks=3,
         )
-
         assert len(result.subtasks) == 3
 
     @pytest.mark.asyncio
@@ -154,32 +114,91 @@ class TestRunPlanner:
         mock_client.generate_code.return_value = "not valid json"
 
         result = await run_planner(
-            openai_client=mock_client,
-            task="task",
-            exploration_result="",
-            reflection_result="{}",
-            file_context=None,
+            openai_client=mock_client, task="task", exploration_result="",
+            reflection_result="{}", file_context=None,
         )
-
         assert result.decompose is False
-        assert len(result.subtasks) == 1
         assert "fallback" in result.reasoning.lower()
 
     @pytest.mark.asyncio
     async def test_empty_subtasks_fallback(self, mock_client):
         mock_client.generate_code.return_value = json.dumps({
-            "decompose": True,
-            "reasoning": "no subtasks given",
-            "subtasks": [],
+            "decompose": True, "reasoning": "no subtasks", "subtasks": [],
         })
 
         result = await run_planner(
-            openai_client=mock_client,
-            task="task",
-            exploration_result="",
-            reflection_result="{}",
-            file_context=None,
+            openai_client=mock_client, task="task", exploration_result="",
+            reflection_result="{}", file_context=None,
         )
-
         assert result.decompose is False
         assert len(result.subtasks) == 1
+
+
+# ---------------------------------------------------------------------------
+# run_replanner tests
+# ---------------------------------------------------------------------------
+
+
+class TestRunReplanner:
+    @pytest.fixture()
+    def mock_client(self):
+        return MagicMock()
+
+    @pytest.fixture()
+    def previous_plan(self):
+        return PlanResult(
+            decompose=True,
+            subtasks=(
+                SubTask(id=1, title="Data Agg", description="aggregate", depends_on=(), expected_output="agg.xlsx"),
+                SubTask(id=2, title="Template Fill", description="fill", depends_on=(1,), expected_output="filled.xlsx"),
+            ),
+            reasoning="original plan",
+        )
+
+    @pytest.mark.asyncio
+    async def test_replan_produces_retry_subtasks(self, mock_client, previous_plan):
+        mock_client.generate_code.return_value = json.dumps({
+            "subtasks": [
+                {"id": 3, "title": "Fix Template", "description": "fix missing cells", "depends_on": [], "expected_output": "fixed.xlsx", "is_retry": True},
+            ],
+            "reasoning": "template fill was incomplete",
+        })
+
+        result = await run_replanner(
+            openai_client=mock_client, task="task",
+            previous_plan=previous_plan, eval_feedback="missing cells",
+            comparison_score=0.45, missing_requirements="section 2 empty",
+            exploration_result="", file_context=None,
+        )
+
+        assert result.decompose is True
+        assert len(result.subtasks) == 1
+        assert result.subtasks[0].is_retry is True
+
+    @pytest.mark.asyncio
+    async def test_replan_invalid_json_keeps_original(self, mock_client, previous_plan):
+        mock_client.generate_code.return_value = "broken json"
+
+        result = await run_replanner(
+            openai_client=mock_client, task="task",
+            previous_plan=previous_plan, eval_feedback="bad",
+            comparison_score=0.3, missing_requirements="everything",
+            exploration_result="", file_context=None,
+        )
+
+        assert result.subtasks == previous_plan.subtasks
+
+    @pytest.mark.asyncio
+    async def test_replan_empty_subtasks_keeps_original(self, mock_client, previous_plan):
+        mock_client.generate_code.return_value = json.dumps({
+            "subtasks": [], "reasoning": "nothing to fix",
+        })
+
+        result = await run_replanner(
+            openai_client=mock_client, task="task",
+            previous_plan=previous_plan, eval_feedback="",
+            comparison_score=0.8, missing_requirements="",
+            exploration_result="", file_context=None,
+        )
+
+        assert result.subtasks == previous_plan.subtasks

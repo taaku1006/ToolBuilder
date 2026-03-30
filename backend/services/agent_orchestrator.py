@@ -21,7 +21,7 @@ from services.sandbox import execute_code
 from services.reflection_engine import run_phase_a, run_phase_b, run_phase_c
 from services.debug_loop import run_debug_loop
 from services.eval_debug_loop import run_eval_debug_loop
-from services.task_planner import run_planner, run_decomposition
+from services.task_planner import run_planner, run_replanner
 from services.xlsx_parser import SheetInfo, build_file_context, parse_file
 from services.langfuse_tracing import OrchestrationTrace
 
@@ -205,14 +205,15 @@ async def orchestrate(
 
     # ------------------------------------------------------------------
     # Phase P — task decomposition (when enabled and file_id present)
+    # Orchestrator directly manages [C→D per subtask] loop (SRP)
     # ------------------------------------------------------------------
     decomposition_succeeded = False
+    decomp_final_code = ""
 
     if settings.task_decomposition_enabled and file_id:
         trace.start_phase("P")
         yield AgentLogEntry(
-            phase="P",
-            action="start",
+            phase="P", action="start",
             content="Phase P: タスク分解を開始します",
             timestamp=_now_iso(),
         )
@@ -226,49 +227,134 @@ async def orchestrate(
             file_context=file_context,
             max_subtasks=settings.max_subtasks,
         )
-        phase_tokens["P"] = _token_snapshot() - _tokens_before_p
 
         if plan.decompose:
             yield AgentLogEntry(
-                phase="P",
-                action="info",
+                phase="P", action="info",
                 content=f"タスクを{len(plan.subtasks)}個のサブタスクに分解します: {plan.reasoning}",
                 timestamp=_now_iso(),
             )
 
-            decomp_final_code: str = ""
-            decomp_output_files: list[str] = []
-            async for entry in run_decomposition(
-                openai_client=openai_client,
-                sandbox_execute=execute_code,
-                plan=plan,
-                task=task,
-                exploration_result=exploration_result,
-                file_context=file_context,
-                file_id=file_id,
-                upload_dir=settings.upload_dir,
-                output_dir=settings.output_dir,
-                timeout=settings.exec_timeout,
-                max_debug_retries=settings.subtask_debug_retries,
-            ):
-                yield entry
-                # Capture final decomposition result
-                if entry.phase == "P" and entry.action == "complete":
-                    try:
-                        decomp_data = json.loads(entry.content)
-                        decomposition_succeeded = decomp_data.get("success", False)
-                        decomp_final_code = decomp_data.get("final_code", "")
-                        decomp_output_files = decomp_data.get("output_files", [])
-                    except (json.JSONDecodeError, TypeError):
-                        pass
+            # Subtask loop: C→D per subtask
+            import shutil
+            import uuid as _uuid
+            workspace_id = str(_uuid.uuid4())
+            workspace_dir = str(Path(settings.output_dir) / f"workspace_{workspace_id}")
+            Path(workspace_dir).mkdir(parents=True, exist_ok=True)
 
+            all_code_parts: list[str] = []
+            completed_summaries_parts: list[str] = []
+            subtask_failed = False
+
+            for subtask in plan.subtasks:
+                phase_label = f"C.{subtask.id}"
+                yield AgentLogEntry(
+                    phase=phase_label, action="start",
+                    content=f"サブタスク {subtask.id}: {subtask.title}",
+                    timestamp=_now_iso(),
+                )
+
+                # List workspace files
+                ws_path = Path(workspace_dir)
+                available_files = "\n".join(
+                    p.name for p in ws_path.iterdir() if p.is_file() and p.name != "script.py"
+                ) or "(empty)"
+                completed_summaries = "\n".join(completed_summaries_parts) or "(none)"
+
+                # Phase C for subtask (code generation)
+                from services.reflection_engine import run_phase_c_subtask
+                code = await run_phase_c_subtask(
+                    openai_client=openai_client,
+                    subtask_title=subtask.title,
+                    subtask_description=subtask.description,
+                    task=task,
+                    exploration_result=exploration_result,
+                    file_context=file_context,
+                    completed_summaries=completed_summaries,
+                    available_files=available_files,
+                )
+
+                # Phase D for subtask (debug)
+                exec_result = await asyncio.to_thread(
+                    execute_code, code,
+                    file_id=file_id,
+                    upload_dir=settings.upload_dir,
+                    output_dir=workspace_dir,
+                    timeout=settings.exec_timeout,
+                )
+
+                if not exec_result.success:
+                    debug_label = f"D.{subtask.id}"
+                    yield AgentLogEntry(
+                        phase=debug_label, action="start",
+                        content=f"サブタスク {subtask.id} デバッグ開始",
+                        timestamp=_now_iso(),
+                    )
+                    debug_result = await run_debug_loop(
+                        code=code, task=f"{task}\nサブタスク: {subtask.title}\n{subtask.description}",
+                        openai_client=openai_client,
+                        sandbox_execute=execute_code,
+                        file_id=file_id, file_context=file_context,
+                        upload_dir=settings.upload_dir,
+                        output_dir=workspace_dir,
+                        timeout=settings.exec_timeout,
+                        max_retries=settings.subtask_debug_retries,
+                    )
+                    if debug_result.success:
+                        code = debug_result.final_code
+                        exec_result = type(exec_result)(
+                            stdout=debug_result.final_stdout,
+                            stderr=debug_result.final_stderr,
+                            elapsed_ms=0, output_files=[], success=True,
+                        )
+                    yield AgentLogEntry(
+                        phase=debug_label,
+                        action="complete" if debug_result.success else "error",
+                        content=f"デバッグ {'成功' if debug_result.success else '失敗'} (retries: {debug_result.total_retries})",
+                        timestamp=_now_iso(),
+                    )
+
+                if exec_result.success:
+                    all_code_parts.append(f"# === サブタスク {subtask.id}: {subtask.title} ===\n{code}")
+                    completed_summaries_parts.append(
+                        f"Step {subtask.id} ({subtask.title}): 成功"
+                    )
+                    # Copy outputs to workspace
+                    for fpath in exec_result.output_files:
+                        src = Path(fpath)
+                        if src.exists():
+                            shutil.copy2(src, ws_path / src.name)
+
+                    yield AgentLogEntry(
+                        phase=phase_label, action="complete",
+                        content=f"サブタスク {subtask.id} 完了",
+                        timestamp=_now_iso(),
+                    )
+                else:
+                    subtask_failed = True
+                    yield AgentLogEntry(
+                        phase=phase_label, action="error",
+                        content=f"サブタスク {subtask.id} 失敗",
+                        timestamp=_now_iso(),
+                    )
+                    break
+
+            decomposition_succeeded = not subtask_failed
+            decomp_final_code = "\n\n".join(all_code_parts) if all_code_parts else ""
             phase_tokens["P"] = _token_snapshot() - _tokens_before_p
             trace.end_phase("P", output={"decompose": True, "success": decomposition_succeeded})
-        else:
-            trace.end_phase("P", output={"decompose": False})
+
             yield AgentLogEntry(
                 phase="P",
-                action="complete",
+                action="complete" if decomposition_succeeded else "error",
+                content=json.dumps({"success": decomposition_succeeded, "final_code": decomp_final_code}, ensure_ascii=False),
+                timestamp=_now_iso(),
+            )
+        else:
+            phase_tokens["P"] = _token_snapshot() - _tokens_before_p
+            trace.end_phase("P", output={"decompose": False})
+            yield AgentLogEntry(
+                phase="P", action="complete",
                 content=f"単一ステップで実行可能と判断: {plan.reasoning}",
                 timestamp=_now_iso(),
             )
