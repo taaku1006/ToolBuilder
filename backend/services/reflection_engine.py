@@ -273,3 +273,53 @@ async def run_phase_c(
         steps=parsed["steps"],
         tips=parsed["tips"],
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase C for subtasks
+# ---------------------------------------------------------------------------
+
+
+async def run_phase_c_subtask(
+    openai_client: OpenAIClient,
+    subtask_title: str,
+    subtask_description: str,
+    task: str,
+    exploration_result: str,
+    file_context: str | None,
+    completed_summaries: str,
+    available_files: str,
+) -> str:
+    """Generate Python code for a single sub-task.
+
+    Returns raw Python code string (not JSON).
+    This is Phase C's responsibility, moved from task_planner.run_subtask().
+    """
+    logger.info(
+        "Phase C subtask started",
+        extra={"subtask_title": subtask_title},
+    )
+
+    template = _load_prompt("phase_c_subtask", "phase_c_subtask.txt")
+    prompt = (
+        template
+        .replace("{task}", task)
+        .replace("{subtask_title}", subtask_title)
+        .replace("{subtask_description}", subtask_description)
+        .replace("{completed_summaries}", completed_summaries)
+        .replace("{available_files}", available_files)
+        .replace("{exploration_result}", exploration_result)
+        .replace("{file_context}", file_context or "")
+    )
+
+    code = openai_client.generate_code(
+        system_prompt=prompt,
+        user_prompt=f"サブタスク「{subtask_title}」のPythonコードを生成してください。",
+    )
+
+    logger.info(
+        "Phase C subtask completed",
+        extra={"subtask_title": subtask_title, "code_length": len(code)},
+    )
+
+    return code

@@ -25,11 +25,28 @@ _MODEL_PRICING: dict[str, tuple[float, float]] = {
 
 
 @dataclass(frozen=True)
+class PipelineConfig:
+    """Structured pipeline configuration for an architecture."""
+
+    explore: bool = True
+    reflect: bool = True
+    decompose: bool = False
+    debug_retry_limit: int = 3
+    eval_debug: bool = False
+    eval_retry_strategy: str = "none"
+    eval_retry_max_loops: int = 2
+    eval_quality_threshold: float = 0.85
+    subtask_debug_retries: int = 2
+    skills: bool = True
+
+
+@dataclass(frozen=True)
 class ArchitectureConfig:
     """Defines an agent architecture variant for evaluation."""
 
     id: str
     phases: list[str] = field(default_factory=lambda: ["A", "B", "C", "D", "E"])
+    pipeline: PipelineConfig | None = None
     model: str = "gpt-4o"
     debug_retry_limit: int = 3
     temperature: float = 0.2
@@ -37,14 +54,37 @@ class ArchitectureConfig:
 
     def to_settings_overrides(self) -> dict:
         """Return a dict of Settings field overrides derived from this config."""
+        if self.pipeline is not None:
+            p = self.pipeline
+            return {
+                "reflection_enabled": p.explore,
+                "reflection_phase_enabled": p.reflect,
+                "task_decomposition_enabled": p.decompose,
+                "debug_loop_enabled": True,
+                "debug_retry_limit": p.debug_retry_limit,
+                "eval_debug_loop_enabled": p.eval_debug,
+                "eval_debug_retry_limit": p.debug_retry_limit,
+                "eval_debug_quality_threshold": p.eval_quality_threshold,
+                "eval_retry_strategy": p.eval_retry_strategy,
+                "eval_retry_max_loops": p.eval_retry_max_loops,
+                "subtask_debug_retries": p.subtask_debug_retries,
+                "max_subtasks": 10,
+                "skills_enabled": p.skills,
+                "openai_model": self.model,
+            }
+
         has_exploration = "A" in self.phases
         has_reflection_b = "B" in self.phases
+        has_planner = "P" in self.phases
         has_debug = "D" in self.phases
+        has_eval_debug = "F" in self.phases
         has_skills = "E" in self.phases
         return {
             "reflection_enabled": has_exploration,
             "reflection_phase_enabled": has_reflection_b,
+            "task_decomposition_enabled": has_planner,
             "debug_loop_enabled": has_debug,
+            "eval_debug_loop_enabled": has_eval_debug,
             "skills_enabled": has_skills,
             "openai_model": self.model,
             "debug_retry_limit": self.debug_retry_limit,
@@ -78,6 +118,10 @@ class EvalMetrics:
     retry_count: int = 0
     code_executes: bool = False
     error_category: str = "none"
+    quality_score: float | None = None
+    quality_details: dict | None = None
+    llm_eval_score: float | None = None
+    llm_eval_details: dict | None = None
 
     def estimated_cost_usd(self, model: str = "gpt-4o") -> float:
         """Estimate cost based on input/output token counts and model pricing."""
@@ -120,9 +164,27 @@ class EvalResult:
 def load_architecture(path: Path) -> ArchitectureConfig:
     """Load an ArchitectureConfig from a JSON file."""
     data = json.loads(path.read_text(encoding="utf-8"))
+
+    pipeline = None
+    if "pipeline" in data:
+        p = data["pipeline"]
+        pipeline = PipelineConfig(
+            explore=p.get("explore", True),
+            reflect=p.get("reflect", True),
+            decompose=p.get("decompose", False),
+            debug_retry_limit=p.get("debug_retry_limit", 3),
+            eval_debug=p.get("eval_debug", False),
+            eval_retry_strategy=p.get("eval_retry_strategy", "none"),
+            eval_retry_max_loops=p.get("eval_retry_max_loops", 2),
+            eval_quality_threshold=p.get("eval_quality_threshold", 0.85),
+            subtask_debug_retries=p.get("subtask_debug_retries", 2),
+            skills=p.get("skills", True),
+        )
+
     return ArchitectureConfig(
         id=data["id"],
         phases=data.get("phases", ["A", "B", "C", "D", "E"]),
+        pipeline=pipeline,
         model=data.get("model", "gpt-4o"),
         debug_retry_limit=data.get("debug_retry_limit", 3),
         temperature=data.get("temperature", 0.2),

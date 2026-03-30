@@ -350,7 +350,7 @@ class TestRunnerFileIdIntegration:
 
         called_with: dict = {}
 
-        async def mock_orchestrate(task, file_id, settings):
+        async def mock_orchestrate(task, file_id, settings, expected_file_path=None):
             called_with["file_id"] = file_id
             entry = MagicMock()
             entry.phase = "C"
@@ -410,7 +410,7 @@ class TestRunnerFileIdIntegration:
 
         called_with: dict = {}
 
-        async def mock_orchestrate(task, file_id, settings):
+        async def mock_orchestrate(task, file_id, settings, expected_file_path=None):
             called_with["file_id"] = file_id
             entry = MagicMock()
             entry.phase = "C"

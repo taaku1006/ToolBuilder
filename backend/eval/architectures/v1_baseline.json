@@ -1,7 +1,1 @@
-{
-  "id": "v1_baseline",
-  "phases": ["A", "B", "C", "D", "E"],
-  "model": "gpt-4o",
-  "debug_retry_limit": 3,
-  "description": "Full pipeline baseline"
-}
+{"id":"v1_baseline","pipeline":{"explore":true,"reflect":true,"decompose":false,"debug_retry_limit":3,"eval_debug":true,"eval_retry_strategy":"none"},"model":"gpt-4o","description":"Full pipeline baseline"}
