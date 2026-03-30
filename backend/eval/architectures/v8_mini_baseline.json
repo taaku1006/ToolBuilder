@@ -1,0 +1,7 @@
+{
+  "id": "v8_mini_baseline",
+  "phases": ["A", "B", "C", "D", "F", "E"],
+  "model": "gpt-4o-mini",
+  "debug_retry_limit": 3,
+  "description": "Full pipeline with gpt-4o-mini (cost baseline)"
+}

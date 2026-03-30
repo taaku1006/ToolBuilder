@@ -485,6 +485,10 @@ async def compare_eval_runs(run_id: str, baseline_id: str) -> dict:
                         retry_count=m.get("retry_count", 0),
                         code_executes=m.get("code_executes", False),
                         error_category=m.get("error_category", "none"),
+                        quality_score=m.get("quality_score"),
+                        quality_details=m.get("quality_details"),
+                        llm_eval_score=m.get("llm_eval_score"),
+                        llm_eval_details=m.get("llm_eval_details"),
                     ),
                     agent_log=item.get("agent_log", []),
                     model=item.get("model", "gpt-4o"),
@@ -504,6 +508,7 @@ async def compare_eval_runs(run_id: str, baseline_id: str) -> dict:
         "unchanged_pass": comparison.unchanged_pass,
         "unchanged_fail": comparison.unchanged_fail,
         "new_cases": comparison.new_cases,
+        "quality_regressions": comparison.quality_regressions,
     }
 
 

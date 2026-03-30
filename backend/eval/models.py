@@ -39,12 +39,16 @@ class ArchitectureConfig:
         """Return a dict of Settings field overrides derived from this config."""
         has_exploration = "A" in self.phases
         has_reflection_b = "B" in self.phases
+        has_planner = "P" in self.phases
         has_debug = "D" in self.phases
+        has_eval_debug = "F" in self.phases
         has_skills = "E" in self.phases
         return {
             "reflection_enabled": has_exploration,
             "reflection_phase_enabled": has_reflection_b,
+            "task_decomposition_enabled": has_planner,
             "debug_loop_enabled": has_debug,
+            "eval_debug_loop_enabled": has_eval_debug,
             "skills_enabled": has_skills,
             "openai_model": self.model,
             "debug_retry_limit": self.debug_retry_limit,
@@ -78,6 +82,10 @@ class EvalMetrics:
     retry_count: int = 0
     code_executes: bool = False
     error_category: str = "none"
+    quality_score: float | None = None
+    quality_details: dict | None = None
+    llm_eval_score: float | None = None
+    llm_eval_details: dict | None = None
 
     def estimated_cost_usd(self, model: str = "gpt-4o") -> float:
         """Estimate cost based on input/output token counts and model pricing."""

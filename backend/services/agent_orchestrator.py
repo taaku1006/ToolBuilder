@@ -20,6 +20,8 @@ from services.openai_client import OpenAIClient
 from services.sandbox import execute_code
 from services.reflection_engine import run_phase_a, run_phase_b, run_phase_c
 from services.debug_loop import run_debug_loop
+from services.eval_debug_loop import run_eval_debug_loop
+from services.task_planner import run_planner, run_decomposition
 from services.xlsx_parser import SheetInfo, build_file_context, parse_file
 from services.langfuse_tracing import OrchestrationTrace
 
@@ -82,6 +84,7 @@ async def orchestrate(
     task: str,
     file_id: str | None,
     settings: Settings,
+    expected_file_path: str | None = None,
 ):
     """Run Phase A→B→C→D (when debug_loop is enabled) sequentially.
 
@@ -201,25 +204,107 @@ async def orchestrate(
         )
 
     # ------------------------------------------------------------------
-    # Phase C — main code generation
+    # Phase P — task decomposition (when enabled and file_id present)
+    # ------------------------------------------------------------------
+    decomposition_succeeded = False
+
+    if settings.task_decomposition_enabled and file_id:
+        trace.start_phase("P")
+        yield AgentLogEntry(
+            phase="P",
+            action="start",
+            content="Phase P: タスク分解を開始します",
+            timestamp=_now_iso(),
+        )
+
+        _tokens_before_p = _token_snapshot()
+        plan = await run_planner(
+            openai_client=openai_client,
+            task=task,
+            exploration_result=exploration_result,
+            reflection_result=reflection_result,
+            file_context=file_context,
+            max_subtasks=settings.max_subtasks,
+        )
+        phase_tokens["P"] = _token_snapshot() - _tokens_before_p
+
+        if plan.decompose:
+            yield AgentLogEntry(
+                phase="P",
+                action="info",
+                content=f"タスクを{len(plan.subtasks)}個のサブタスクに分解します: {plan.reasoning}",
+                timestamp=_now_iso(),
+            )
+
+            decomp_final_code: str = ""
+            decomp_output_files: list[str] = []
+            async for entry in run_decomposition(
+                openai_client=openai_client,
+                sandbox_execute=execute_code,
+                plan=plan,
+                task=task,
+                exploration_result=exploration_result,
+                file_context=file_context,
+                file_id=file_id,
+                upload_dir=settings.upload_dir,
+                output_dir=settings.output_dir,
+                timeout=settings.exec_timeout,
+                max_debug_retries=settings.subtask_debug_retries,
+            ):
+                yield entry
+                # Capture final decomposition result
+                if entry.phase == "P" and entry.action == "complete":
+                    try:
+                        decomp_data = json.loads(entry.content)
+                        decomposition_succeeded = decomp_data.get("success", False)
+                        decomp_final_code = decomp_data.get("final_code", "")
+                        decomp_output_files = decomp_data.get("output_files", [])
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+
+            phase_tokens["P"] = _token_snapshot() - _tokens_before_p
+            trace.end_phase("P", output={"decompose": True, "success": decomposition_succeeded})
+        else:
+            trace.end_phase("P", output={"decompose": False})
+            yield AgentLogEntry(
+                phase="P",
+                action="complete",
+                content=f"単一ステップで実行可能と判断: {plan.reasoning}",
+                timestamp=_now_iso(),
+            )
+
+    # ------------------------------------------------------------------
+    # Phase C — main code generation (skipped if decomposition succeeded)
     # ------------------------------------------------------------------
     trace.start_phase("C")
     yield AgentLogEntry(
         phase="C",
         action="start",
-        content="Phase C: メインコードの生成を開始します",
+        content="Phase C: メインコードの生成を開始します" if not decomposition_succeeded else "Phase C: タスク分解が成功したためスキップします",
         timestamp=_now_iso(),
     )
 
-    _tokens_before_c = _token_snapshot()
-    phase_c = await run_phase_c(
-        openai_client=openai_client,
-        exploration_result=exploration_result,
-        reflection_result=reflection_result,
-        task=task,
-        file_context=file_context,
-    )
-    phase_tokens["C"] = _token_snapshot() - _tokens_before_c
+    if decomposition_succeeded:
+        # Use decomposition's merged code
+        _tokens_before_c = _token_snapshot()
+        from services.reflection_engine import PhaseCResult
+        phase_c = PhaseCResult(
+            summary="タスク分解により段階的に生成されたコード",
+            python_code=decomp_final_code,
+            steps=[f"サブタスク{st.id}: {st.title}" for st in plan.subtasks],
+            tips="タスク分解エージェントにより自動生成",
+        )
+        phase_tokens["C"] = 0
+    else:
+        _tokens_before_c = _token_snapshot()
+        phase_c = await run_phase_c(
+            openai_client=openai_client,
+            exploration_result=exploration_result,
+            reflection_result=reflection_result,
+            task=task,
+            file_context=file_context,
+        )
+        phase_tokens["C"] = _token_snapshot() - _tokens_before_c
 
     # ------------------------------------------------------------------
     # Phase D — autonomous debugging loop
@@ -305,6 +390,75 @@ async def orchestrate(
     exec_succeeded = not settings.debug_loop_enabled or (
         settings.debug_loop_enabled and debug_retries < settings.debug_retry_limit
     )
+
+    # ------------------------------------------------------------------
+    # Phase F — evaluation-driven quality debug loop (optional)
+    # ------------------------------------------------------------------
+    eval_debug_retries = 0
+    eval_final_score: float | None = None
+
+    if (
+        settings.eval_debug_loop_enabled
+        and expected_file_path
+        and Path(expected_file_path).exists()
+        and exec_succeeded
+    ):
+        trace.start_phase("F")
+        yield AgentLogEntry(
+            phase="F",
+            action="start",
+            content="Phase F: 評価駆動デバッグループを開始します",
+            timestamp=_now_iso(),
+        )
+
+        _tokens_before_f = _token_snapshot()
+
+        eval_debug_result = await run_eval_debug_loop(
+            code=python_code,
+            task=task,
+            expected_file_path=expected_file_path,
+            openai_client=openai_client,
+            sandbox_execute=execute_code,
+            file_id=file_id,
+            file_context=file_context,
+            upload_dir=settings.upload_dir,
+            output_dir=settings.output_dir,
+            timeout=settings.exec_timeout,
+            max_retries=settings.eval_debug_retry_limit,
+            quality_threshold=settings.eval_debug_quality_threshold,
+            settings=settings,
+        )
+
+        for attempt in eval_debug_result.attempts:
+            yield AgentLogEntry(
+                phase="F",
+                action="retry",
+                content=f"リトライ {attempt.retry_num}: score={attempt.mechanical_score:.2%} {attempt.comparison_summary[:100]}",
+                timestamp=_now_iso(),
+            )
+
+        phase_tokens["F"] = _token_snapshot() - _tokens_before_f
+        eval_debug_retries = eval_debug_result.total_retries
+        eval_final_score = eval_debug_result.final_score
+
+        if eval_debug_result.success:
+            python_code = eval_debug_result.final_code
+            trace.end_phase("F", output=f"score={eval_debug_result.final_score:.2%} ({eval_debug_result.total_retries}回リトライ)")
+            yield AgentLogEntry(
+                phase="F",
+                action="complete",
+                content=f"品質スコア {eval_debug_result.final_score:.2%} で合格 ({eval_debug_result.total_retries}回リトライ)",
+                timestamp=_now_iso(),
+            )
+        else:
+            trace.end_phase("F", output=f"score={eval_debug_result.final_score:.2%} 閾値未達", status="error")
+            yield AgentLogEntry(
+                phase="F",
+                action="error",
+                content=f"品質スコア {eval_debug_result.final_score:.2%} (閾値: {settings.eval_debug_quality_threshold:.0%}) - 改善できませんでした",
+                timestamp=_now_iso(),
+            )
+
     logger.info(
         "Orchestration completed",
         extra={"debug_retries": debug_retries, "exec_succeeded": exec_succeeded},
@@ -317,6 +471,8 @@ async def orchestrate(
             "steps": phase_c.steps,
             "tips": phase_c.tips,
             "debug_retries": debug_retries,
+            "eval_debug_retries": eval_debug_retries,
+            "eval_final_score": eval_final_score,
             "total_tokens": int(openai_client.total_tokens) if isinstance(openai_client.total_tokens, int) else 0,
             "prompt_tokens": int(openai_client.prompt_tokens) if isinstance(openai_client.prompt_tokens, int) else 0,
             "completion_tokens": int(openai_client.completion_tokens) if isinstance(openai_client.completion_tokens, int) else 0,

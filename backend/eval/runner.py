@@ -5,6 +5,7 @@ Executes test cases against architecture configs and collects metrics.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import shutil
@@ -15,6 +16,9 @@ from typing import TYPE_CHECKING, Callable
 
 from eval.models import ArchitectureConfig, EvalMetrics, EvalResult, TestCase
 from services.agent_orchestrator import orchestrate
+from services.eval_agent import evaluate_output
+from services.excel_comparator import compare_excel_files, find_best_output_match
+from services.sandbox import execute_code
 
 if TYPE_CHECKING:
     from eval.versioning import RunSnapshot
@@ -100,6 +104,7 @@ class EvalRunner:
         phase_starts: dict[str, float] = {}
         phase_durations: dict[str, int] = {}
         phase_tokens: dict[str, int] = {}
+        decomp_output_files: list[str] = []
 
         start_ms = time.monotonic_ns() // 1_000_000
 
@@ -129,11 +134,14 @@ class EvalRunner:
                 task=case.task,
                 file_id=file_id,
                 settings=settings,
+                expected_file_path=case.expected_file_path,
             ):
+                # Keep full content for internal processing; truncate for log storage
+                full_content = entry.content
                 log_entry = {
                     "phase": entry.phase,
                     "action": entry.action,
-                    "content": entry.content[:200],
+                    "content": full_content[:200],
                     "timestamp": entry.timestamp,
                 }
                 agent_log.append(log_entry)
@@ -149,6 +157,14 @@ class EvalRunner:
                 # Count retries
                 if entry.action == "retry":
                     retry_count += 1
+
+                # Capture decomposition output files from Phase P complete
+                if entry.phase == "P" and entry.action == "complete":
+                    try:
+                        p_payload = json.loads(entry.content)
+                        decomp_output_files = p_payload.get("output_files", [])
+                    except (json.JSONDecodeError, TypeError):
+                        pass
 
                 # Extract generated code from Phase C complete
                 if entry.phase == "C" and entry.action == "complete":
@@ -172,6 +188,86 @@ class EvalRunner:
 
         success = generated_code is not None and error is None
 
+        # ----- Output quality comparison -----
+        quality_score: float | None = None
+        quality_details: dict | None = None
+        actual_path: str | None = None
+
+        if (
+            success
+            and case.expected_file_path
+            and Path(case.expected_file_path).exists()
+        ):
+            try:
+                output_files_for_compare: list[str] = []
+
+                if decomp_output_files:
+                    # Task decomposition: use workspace output files directly
+                    output_files_for_compare = [
+                        f for f in decomp_output_files if Path(f).exists()
+                    ]
+                elif generated_code:
+                    # Standard path: re-execute code to get output files
+                    exec_result = await asyncio.to_thread(
+                        execute_code,
+                        generated_code,
+                        file_id=file_id,
+                        upload_dir=settings.upload_dir,
+                        output_dir=settings.output_dir,
+                        timeout=settings.exec_timeout,
+                    )
+                    if exec_result.success:
+                        output_files_for_compare = exec_result.output_files
+
+                if output_files_for_compare:
+                    actual_path = find_best_output_match(
+                        output_files_for_compare, case.expected_file_path,
+                    )
+                    if actual_path:
+                        comparison = compare_excel_files(
+                            actual_path, case.expected_file_path,
+                        )
+                        quality_score = comparison.overall_score
+                        quality_details = {
+                            "overall_score": comparison.overall_score,
+                            "missing_sheets": list(comparison.missing_sheets),
+                            "extra_sheets": list(comparison.extra_sheets),
+                            "sheet_count": len(comparison.sheet_results),
+                            "error": comparison.error,
+                        }
+            except Exception:
+                logger.warning("Quality comparison failed", exc_info=True)
+
+        # ----- LLM evaluation agent -----
+        llm_eval_score: float | None = None
+        llm_eval_details: dict | None = None
+
+        if (
+            success
+            and case.expected_file_path
+            and Path(case.expected_file_path).exists()
+            and actual_path
+        ):
+            try:
+                eval_result = await asyncio.to_thread(
+                    evaluate_output,
+                    task=case.task,
+                    actual_path=actual_path,
+                    expected_path=case.expected_file_path,
+                    settings=settings,
+                )
+                if eval_result is not None:
+                    llm_eval_score = eval_result.overall
+                    llm_eval_details = {
+                        "semantic_correctness": eval_result.semantic_correctness,
+                        "data_integrity": eval_result.data_integrity,
+                        "completeness": eval_result.completeness,
+                        "overall": eval_result.overall,
+                        "reasoning": eval_result.reasoning,
+                    }
+            except Exception:
+                logger.warning("LLM eval agent failed", exc_info=True)
+
         return EvalResult(
             architecture_id=arch.id,
             test_case_id=case.id,
@@ -188,6 +284,10 @@ class EvalRunner:
                 retry_count=retry_count,
                 code_executes=success,
                 error_category=classify_error(error, agent_log),
+                quality_score=quality_score,
+                quality_details=quality_details,
+                llm_eval_score=llm_eval_score,
+                llm_eval_details=llm_eval_details,
             ),
             agent_log=agent_log,
             generated_code=generated_code,

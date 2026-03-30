@@ -19,6 +19,8 @@ def _make_settings(
     reflection_enabled: bool = True,
     reflection_phase_enabled: bool = True,
     debug_loop_enabled: bool = False,
+    task_decomposition_enabled: bool = False,
+    eval_debug_loop_enabled: bool = False,
 ) -> Settings:
     return Settings(
         openai_api_key="test-key-123",
@@ -27,6 +29,8 @@ def _make_settings(
         reflection_enabled=reflection_enabled,
         reflection_phase_enabled=reflection_phase_enabled,
         debug_loop_enabled=debug_loop_enabled,
+        task_decomposition_enabled=task_decomposition_enabled,
+        eval_debug_loop_enabled=eval_debug_loop_enabled,
     )
 
 

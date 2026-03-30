@@ -1,0 +1,7 @@
+{
+  "id": "v9_mini_planner",
+  "phases": ["A", "B", "P", "C", "D", "F", "E"],
+  "model": "gpt-4o-mini",
+  "debug_retry_limit": 3,
+  "description": "Planner with gpt-4o-mini (cost vs quality tradeoff)"
+}

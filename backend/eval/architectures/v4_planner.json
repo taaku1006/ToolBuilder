@@ -1,0 +1,7 @@
+{
+  "id": "v4_planner",
+  "phases": ["A", "B", "P", "C", "D", "F", "E"],
+  "model": "gpt-4o",
+  "debug_retry_limit": 3,
+  "description": "Full pipeline + task decomposition (falls back to Phase C)"
+}

@@ -1,0 +1,7 @@
+{
+  "id": "v2_minimal",
+  "phases": ["C", "D", "F"],
+  "model": "gpt-4o",
+  "debug_retry_limit": 3,
+  "description": "Minimal: code gen + debug only, no file exploration"
+}

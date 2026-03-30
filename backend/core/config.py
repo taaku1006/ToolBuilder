@@ -29,6 +29,14 @@ class Settings(BaseSettings):
     skills_dir: str = "./skills"
     skills_similarity_threshold: float = 0.4
 
+    eval_debug_loop_enabled: bool = False
+    eval_debug_retry_limit: int = 3
+    eval_debug_quality_threshold: float = 0.85
+
+    task_decomposition_enabled: bool = False
+    max_subtasks: int = 5
+    subtask_debug_retries: int = 2
+
     langfuse_enabled: bool = False
     langfuse_public_key: str = ""
     langfuse_secret_key: str = ""
