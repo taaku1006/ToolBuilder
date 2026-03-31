@@ -80,11 +80,16 @@ def _resolve_file_context(file_id: str | None, settings: Settings) -> str | None
 # ---------------------------------------------------------------------------
 
 
+class CancelledError(Exception):
+    """Raised when orchestration is cancelled via cancel_check."""
+
+
 async def orchestrate(
     task: str,
     file_id: str | None,
     settings: Settings,
     expected_file_path: str | None = None,
+    cancel_check: callable | None = None,
 ):
     """Run Phase A→B→C→D (when debug_loop is enabled) sequentially.
 
@@ -109,6 +114,11 @@ async def orchestrate(
     from services.reflection_engine import set_settings_ref
     set_settings_ref(settings)
 
+    def _check_cancel() -> None:
+        """Raise CancelledError if cancellation was requested."""
+        if cancel_check is not None and cancel_check():
+            raise CancelledError("Orchestration cancelled")
+
     openai_client = OpenAIClient(settings)
     file_context = _resolve_file_context(file_id, settings)
     trace = OrchestrationTrace(settings, task, metadata={
@@ -132,6 +142,7 @@ async def orchestrate(
     # ------------------------------------------------------------------
     # Phase A — exploration (only when file is provided AND reflection on)
     # ------------------------------------------------------------------
+    _check_cancel()
     if file_id and settings.reflection_enabled:
         trace.start_phase("A")
         yield AgentLogEntry(
@@ -165,6 +176,7 @@ async def orchestrate(
     # ------------------------------------------------------------------
     # Phase B — reflection / tool synthesis (independent from A)
     # ------------------------------------------------------------------
+    _check_cancel()
     if file_id and settings.reflection_phase_enabled:
         trace.start_phase("B")
         yield AgentLogEntry(
@@ -207,6 +219,7 @@ async def orchestrate(
     # Phase P — task decomposition (when enabled and file_id present)
     # Orchestrator directly manages [C→D per subtask] loop (SRP)
     # ------------------------------------------------------------------
+    _check_cancel()
     decomposition_succeeded = False
     decomp_final_code = ""
 
@@ -247,6 +260,7 @@ async def orchestrate(
             subtask_failed = False
 
             for subtask in plan.subtasks:
+                _check_cancel()
                 phase_label = f"C.{subtask.id}"
                 yield AgentLogEntry(
                     phase=phase_label, action="start",
@@ -361,6 +375,7 @@ async def orchestrate(
 
     # ------------------------------------------------------------------
     # Phase C — main code generation (skipped if decomposition succeeded)
+    _check_cancel()
     # ------------------------------------------------------------------
     trace.start_phase("C")
     yield AgentLogEntry(
@@ -395,6 +410,7 @@ async def orchestrate(
     # ------------------------------------------------------------------
     # Phase D — autonomous debugging loop
     # ------------------------------------------------------------------
+    _check_cancel()
     python_code = phase_c.python_code
     debug_retries = 0
 
@@ -480,6 +496,7 @@ async def orchestrate(
     # ------------------------------------------------------------------
     # Phase F — evaluation-driven quality debug loop (optional)
     # ------------------------------------------------------------------
+    _check_cancel()
     eval_debug_retries = 0
     eval_final_score: float | None = None
 
@@ -579,6 +596,7 @@ async def orchestrate(
     # ------------------------------------------------------------------
     # Phase E — skill save suggestion
     # ------------------------------------------------------------------
+    _check_cancel()
     if settings.skills_enabled:
         trace.start_phase("E")
         yield AgentLogEntry(

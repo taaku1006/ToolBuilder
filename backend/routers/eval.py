@@ -180,6 +180,7 @@ async def start_eval_run(
                 architectures=archs,
                 test_cases=cases,
                 settings_factory=_settings_factory,
+                cancel_check=lambda: _run_status[run_id]["cancel_requested"],
             )
 
             results = []

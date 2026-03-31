@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Callable
 
 from eval.models import ArchitectureConfig, EvalMetrics, EvalResult, TestCase
-from services.agent_orchestrator import orchestrate
+from services.agent_orchestrator import CancelledError, orchestrate
 from services.eval_agent import evaluate_output
 from services.excel_comparator import compare_excel_files, find_best_output_match
 from services.sandbox import execute_code
@@ -58,9 +58,11 @@ class EvalRunner:
         architectures: list[ArchitectureConfig],
         test_cases: list[TestCase],
         settings_factory: Callable,
+        cancel_check: Callable | None = None,
     ) -> None:
         self.architectures = architectures
         self.test_cases = test_cases
+        self._cancel_check = cancel_check
         self._settings_factory = settings_factory
 
     def _prepare_file_id(self, case: TestCase, settings) -> str | None:
@@ -135,6 +137,7 @@ class EvalRunner:
                 file_id=file_id,
                 settings=settings,
                 expected_file_path=case.expected_file_path,
+                cancel_check=self._cancel_check,
             ):
                 # Keep full content for internal processing; truncate for log storage
                 full_content = entry.content
@@ -180,6 +183,8 @@ class EvalRunner:
                     except (json.JSONDecodeError, TypeError):
                         pass
 
+        except CancelledError:
+            error = "cancelled"
         except Exception as exc:
             error = str(exc)
 
