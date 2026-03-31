@@ -1,1 +1,1 @@
-{"id":"v5_planner_replan","pipeline":{"explore":true,"reflect":true,"decompose":true,"debug_retry_limit":3,"eval_debug":true,"eval_retry_strategy":"replan","eval_retry_max_loops":2,"subtask_debug_retries":2},"model":"gpt-4o","description":"Planner + smart replan on F failure"}
+{"id":"v5_planner_replan","pipeline":{"explore":true,"reflect":true,"decompose":true,"debug_retry_limit":3,"eval_debug":true,"llm_eval_debug":true,"eval_retry_strategy":"replan","eval_retry_max_loops":2,"subtask_debug_retries":2},"model":"gpt-4o","description":"Planner + smart replan on F failure"}

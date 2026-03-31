@@ -32,8 +32,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await create_tables()
     # Seed prompts into Langfuse if enabled
     if settings.langfuse_enabled:
-        from services.prompt_manager import seed_prompts
-        seed_prompts(settings)
+        try:
+            from services.prompt_manager import seed_prompts
+            seed_prompts(settings)
+        except Exception:
+            logger.warning("Failed to seed prompts into Langfuse, continuing without it", exc_info=True)
     yield
     logger.info("Application shutdown")
 

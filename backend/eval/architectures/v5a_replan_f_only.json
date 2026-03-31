@@ -1,0 +1,1 @@
+{"id":"v5a_replan_f_only","pipeline":{"explore":true,"reflect":true,"decompose":true,"debug_retry_limit":3,"eval_debug":true,"llm_eval_debug":false,"eval_retry_strategy":"replan","eval_retry_max_loops":2,"subtask_debug_retries":2},"model":"gpt-4o","description":"Planner + replan, F only (no LLM eval G)"}

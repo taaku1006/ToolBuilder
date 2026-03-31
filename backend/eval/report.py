@@ -314,6 +314,19 @@ class EvalReport:
 
         return "\n".join(lines)
 
+    def result_details(self) -> dict[str, dict[str, dict]]:
+        """Per case/arch detailed scores, failure reasons, and output files."""
+        details: dict[str, dict[str, dict]] = {}
+        for r in self._results:
+            details.setdefault(r.test_case_id, {})[r.architecture_id] = {
+                "quality_score": r.metrics.quality_score,
+                "quality_details": r.metrics.quality_details,
+                "llm_eval_score": r.metrics.llm_eval_score,
+                "llm_eval_details": r.metrics.llm_eval_details,
+                "output_files": r.output_files,
+            }
+        return details
+
     def to_dict(self) -> dict:
         """Serialize the full report to a dict."""
         return {
@@ -321,6 +334,7 @@ class EvalReport:
             "comparison_matrix": self.comparison_matrix(),
             "quality_matrix": self.quality_matrix(),
             "llm_eval_matrix": self.llm_eval_matrix(),
+            "result_details": self.result_details(),
             "best_architecture": self.best_architecture(),
             "architecture_ids": self.architecture_ids,
             "test_case_ids": self.test_case_ids,

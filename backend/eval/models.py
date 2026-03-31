@@ -36,6 +36,9 @@ class PipelineConfig:
     eval_retry_strategy: str = "none"
     eval_retry_max_loops: int = 2
     eval_quality_threshold: float = 0.85
+    llm_eval_debug: bool = False
+    llm_eval_score_threshold: float = 7.0
+    llm_eval_retry_limit: int = 2
     subtask_debug_retries: int = 2
     skills: bool = True
 
@@ -45,7 +48,7 @@ class ArchitectureConfig:
     """Defines an agent architecture variant for evaluation."""
 
     id: str
-    phases: list[str] = field(default_factory=lambda: ["A", "B", "C", "D", "E"])
+    phases: list[str] = field(default_factory=lambda: ["A", "B", "P", "C", "D", "F", "G", "E"])
     pipeline: PipelineConfig | None = None
     model: str = "gpt-4o"
     debug_retry_limit: int = 3
@@ -68,6 +71,9 @@ class ArchitectureConfig:
                 "eval_retry_strategy": p.eval_retry_strategy,
                 "eval_retry_max_loops": p.eval_retry_max_loops,
                 "subtask_debug_retries": p.subtask_debug_retries,
+                "llm_eval_loop_enabled": p.llm_eval_debug,
+                "llm_eval_score_threshold": p.llm_eval_score_threshold,
+                "llm_eval_retry_limit": p.llm_eval_retry_limit,
                 "max_subtasks": 10,
                 "skills_enabled": p.skills,
                 "openai_model": self.model,
@@ -142,6 +148,7 @@ class EvalResult:
     model: str = "gpt-4o"
     generated_code: str | None = None
     error: str | None = None
+    output_files: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         """Serialize to a plain dict (JSON-safe)."""
@@ -153,6 +160,7 @@ class EvalResult:
             "agent_log": self.agent_log,
             "generated_code": self.generated_code,
             "error": self.error,
+            "output_files": self.output_files,
         }
 
 
@@ -177,13 +185,16 @@ def load_architecture(path: Path) -> ArchitectureConfig:
             eval_retry_strategy=p.get("eval_retry_strategy", "none"),
             eval_retry_max_loops=p.get("eval_retry_max_loops", 2),
             eval_quality_threshold=p.get("eval_quality_threshold", 0.85),
+            llm_eval_debug=p.get("llm_eval_debug", False),
+            llm_eval_score_threshold=p.get("llm_eval_score_threshold", 7.0),
+            llm_eval_retry_limit=p.get("llm_eval_retry_limit", 2),
             subtask_debug_retries=p.get("subtask_debug_retries", 2),
             skills=p.get("skills", True),
         )
 
     return ArchitectureConfig(
         id=data["id"],
-        phases=data.get("phases", ["A", "B", "C", "D", "E"]),
+        phases=data.get("phases", ["A", "B", "P", "C", "D", "F", "G", "E"]),
         pipeline=pipeline,
         model=data.get("model", "gpt-4o"),
         debug_retry_limit=data.get("debug_retry_limit", 3),

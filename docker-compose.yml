@@ -5,6 +5,13 @@ services:
     ports:
       - "8000:8000"
     env_file: ./backend/.env
+    environment:
+      - HTTP_PROXY=${HTTP_PROXY}
+      - HTTPS_PROXY=${HTTPS_PROXY}
+      - http_proxy=${HTTP_PROXY}
+      - https_proxy=${HTTPS_PROXY}
+      - NO_PROXY=${NO_PROXY}
+      - no_proxy=${NO_PROXY}
     volumes:
       - ./backend:/app
     depends_on: []
@@ -19,6 +26,40 @@ services:
     depends_on:
       - backend
 
+  langfuse-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: langfuse
+      POSTGRES_DB: langfuse
+    ports:
+      - "5432:5432"
+    volumes:
+      - langfuse_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langfuse"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  langfuse:
+    image: langfuse/langfuse:2
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://langfuse:langfuse@langfuse-db:5432/langfuse
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: mysecretchangeme
+      SALT: mysaltchangeme
+      TELEMETRY_ENABLED: "false"
+      LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: "false"
+      HTTP_PROXY: ${HTTP_PROXY}
+      HTTPS_PROXY: ${HTTPS_PROXY}
+      NO_PROXY: ${NO_PROXY}
+    depends_on:
+      langfuse-db:
+        condition: service_healthy
+
   nginx:
     image: nginx:alpine
     ports:
@@ -28,3 +69,6 @@ services:
     depends_on:
       - backend
       - frontend
+
+volumes:
+  langfuse_db_data:

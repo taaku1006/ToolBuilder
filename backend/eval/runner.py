@@ -197,6 +197,7 @@ class EvalRunner:
         quality_score: float | None = None
         quality_details: dict | None = None
         actual_path: str | None = None
+        output_files_for_compare: list[str] = []
 
         if (
             success
@@ -273,6 +274,20 @@ class EvalRunner:
             except Exception:
                 logger.warning("LLM eval agent failed", exc_info=True)
 
+        # ----- Final success determination -----
+        # Mechanical comparison (Phase F gate)
+        mechanical_success = True
+        if quality_score is not None:
+            mechanical_success = quality_score >= settings.eval_debug_quality_threshold
+
+        # LLM evaluation (Phase G gate)
+        llm_eval_success = True
+        if llm_eval_score is not None:
+            llm_eval_success = llm_eval_score >= settings.llm_eval_score_threshold
+
+        if success:
+            success = mechanical_success and llm_eval_success
+
         return EvalResult(
             architecture_id=arch.id,
             test_case_id=case.id,
@@ -297,6 +312,7 @@ class EvalRunner:
             agent_log=agent_log,
             generated_code=generated_code,
             error=error,
+            output_files=output_files_for_compare if output_files_for_compare else [],
         )
 
     async def run_all(self) -> list[EvalResult]:

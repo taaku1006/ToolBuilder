@@ -5,6 +5,7 @@ import {
   type RunStatus,
   type PastRun,
   type EvalReport,
+  type ResultDetail,
   getArchitectures,
   getTestCases,
   startRun,
@@ -14,6 +15,7 @@ import {
   createTestCase,
   deleteTestCase,
   getRunSnapshot,
+  getResultFiles,
   diffRuns,
   compareRuns,
   type RunSnapshot,
@@ -25,33 +27,9 @@ import {
 // Sub-components
 // ---------------------------------------------------------------------------
 
-const PHASE_INFO: Record<string, { label: string; color: string; description: string }> = {
-  A: {
-    label: 'A',
-    color: 'bg-blue-900 text-blue-300',
-    description: 'Excel構造の探索 — シート名・カラム・データ型・統計情報を自動分析',
-  },
-  B: {
-    label: 'B',
-    color: 'bg-purple-900 text-purple-300',
-    description: 'ツール必要性の内省 — カスタムツールが必要か判断し、必要なら生成・実行',
-  },
-  C: {
-    label: 'C',
-    color: 'bg-green-900 text-green-300',
-    description: 'メインコード生成 — 全コンテキストからPythonコードを生成',
-  },
-  D: {
-    label: 'D',
-    color: 'bg-yellow-900 text-yellow-300',
-    description: '自律デバッグ — 実行→エラー→修正→再実行を自動リトライ',
-  },
-  E: {
-    label: 'E',
-    color: 'bg-pink-900 text-pink-300',
-    description: 'スキル保存提案 — 成功したコードをスキルとして保存を提案',
-  },
-}
+import { PHASE_DEFINITIONS, PHASE_ORDER } from '../constants/phases'
+
+const PHASE_INFO = PHASE_DEFINITIONS
 
 function PhaseTag({ phase }: { phase: string }) {
   const info = PHASE_INFO[phase]
@@ -102,13 +80,13 @@ function ArchDetailPanel({ arch }: { arch: Architecture }) {
 
   // Fallback for legacy phases-only configs
   if (!p) {
-    const allPhases = ['A', 'B', 'C', 'D', 'F', 'E']
+    const legacyPhases = arch.phases?.length ? arch.phases : [...PHASE_ORDER]
     return (
       <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-2">
         <div className="font-mono text-sm text-white">{arch.id}</div>
         <div className="text-xs text-gray-500">{arch.description}</div>
         <div className="flex items-center gap-1">
-          {allPhases.map((ph, i) => (
+          {legacyPhases.map((ph, i) => (
             <div key={ph} className="flex items-center">
               {i > 0 && <span className="mx-1 text-xs text-gray-600">→</span>}
               <PhaseTag phase={ph} />
@@ -212,6 +190,20 @@ function ArchDetailPanel({ arch }: { arch: Architecture }) {
 
         <FlowArrow />
 
+        {/* Row 3b: LLM Eval Debug (Phase G) */}
+        <FlowBlock label="G: LLM Eval" phase="E" active={p.llm_eval_debug ?? false}>
+          <span>
+            LLM評価デバッグ
+            {p.llm_eval_debug && (
+              <span className="ml-1 text-purple-400">
+                (閾値:{p.llm_eval_score_threshold ?? 7.0}/10 x{p.llm_eval_retry_limit ?? 2})
+              </span>
+            )}
+          </span>
+        </FlowBlock>
+
+        <FlowArrow />
+
         {/* Row 4: Skills */}
         <FlowBlock label="E: Skills" phase="E" active={p.skills ?? true}>
           <span>スキル保存提案</span>
@@ -271,7 +263,18 @@ function PhaseBreakdown({ report, archs }: { report: EvalReport; archs: Architec
   const { summary } = report
   const archIds = Object.keys(summary)
   const archMap = Object.fromEntries(archs.map((a) => [a.id, a]))
-  const allPhases = ['A', 'B', 'C', 'D', 'E']
+  // Collect all phases dynamically from data, maintain logical order
+  const phaseOrder = [...PHASE_ORDER]
+  const seenPhases = new Set<string>()
+  for (const id of archIds) {
+    const pt = summary[id]?.avg_phase_tokens
+    if (pt) {
+      for (const p of Object.keys(pt)) {
+        seenPhases.add(p)
+      }
+    }
+  }
+  const allPhases = phaseOrder.filter((p) => seenPhases.has(p))
 
   // Check if any architecture has phase token data
   const hasData = archIds.some((id) => {
@@ -338,12 +341,79 @@ function PhaseBreakdown({ report, archs }: { report: EvalReport; archs: Architec
   )
 }
 
+function scoreColor(score: number, max: number): string {
+  const ratio = score / max
+  if (ratio >= 0.85) return 'text-green-400'
+  if (ratio >= 0.6) return 'text-yellow-400'
+  return 'text-red-400'
+}
+
+function scoreBg(score: number, max: number): string {
+  const ratio = score / max
+  if (ratio >= 0.85) return 'bg-green-900/20'
+  if (ratio >= 0.6) return 'bg-yellow-900/20'
+  return 'bg-red-900/20'
+}
+
+function DetailPopup({ detail, onClose }: { detail: ResultDetail; onClose: () => void }) {
+  const qd = detail.quality_details
+  const ld = detail.llm_eval_details
+  return (
+    <div className="absolute z-50 top-full left-1/2 -translate-x-1/2 mt-1 w-80 bg-gray-800 border border-gray-600 rounded-lg p-3 shadow-xl text-left">
+      <button onClick={onClose} className="absolute top-1 right-2 text-gray-500 hover:text-gray-300 text-xs">x</button>
+      <div className="text-xs space-y-2">
+        {qd && (
+          <div>
+            <div className="font-semibold text-pink-300 mb-1">F: Mechanical ({Math.round((detail.quality_score ?? 0) * 100)}%)</div>
+            {qd.missing_sheets && qd.missing_sheets.length > 0 && (
+              <div className="text-red-400">Missing: {qd.missing_sheets.join(', ')}</div>
+            )}
+            {qd.extra_sheets && qd.extra_sheets.length > 0 && (
+              <div className="text-yellow-400">Extra: {qd.extra_sheets.join(', ')}</div>
+            )}
+            {qd.error && <div className="text-red-400">Error: {qd.error}</div>}
+          </div>
+        )}
+        {ld && (
+          <div>
+            <div className="font-semibold text-purple-300 mb-1">G: LLM Eval ({detail.llm_eval_score?.toFixed(1)}/10)</div>
+            <div className="grid grid-cols-3 gap-1 text-[10px]">
+              <span>Semantic: {ld.semantic_correctness}/10</span>
+              <span>Integrity: {ld.data_integrity}/10</span>
+              <span>Complete: {ld.completeness}/10</span>
+            </div>
+            {ld.reasoning && (
+              <div className="mt-1 text-gray-400 leading-tight max-h-24 overflow-y-auto">{ld.reasoning}</div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function ComparisonMatrix({
   report,
+  runId,
 }: {
   report: EvalReport
+  runId?: string
 }) {
-  const { comparison_matrix, architecture_ids, test_case_ids } = report
+  const { comparison_matrix, result_details, architecture_ids, test_case_ids } = report
+  const [expandedCell, setExpandedCell] = useState<string | null>(null)
+
+  const handleDownload = async (archId: string, caseId: string) => {
+    if (!runId) return
+    try {
+      const data = await getResultFiles(runId, archId, caseId)
+      for (const f of data.files) {
+        window.open(`/api/download/${f.path}`, '_blank')
+      }
+    } catch {
+      // No files available
+    }
+  }
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
@@ -363,11 +433,53 @@ function ComparisonMatrix({
               <td className="py-2 px-3 text-gray-300 font-mono text-xs">{caseId}</td>
               {architecture_ids.map((archId) => {
                 const ok = comparison_matrix[caseId]?.[archId]
+                const detail = result_details?.[caseId]?.[archId]
+                const cellKey = `${caseId}__${archId}`
+                const isExpanded = expandedCell === cellKey
+                const qs = detail?.quality_score
+                const ls = detail?.llm_eval_score
+                const hasFiles = detail?.output_files && detail.output_files.length > 0
+
                 return (
-                  <td key={archId} className="text-center py-2 px-3">
-                    <span className={ok ? 'text-green-400' : 'text-red-400'}>
-                      {ok ? 'OK' : 'NG'}
-                    </span>
+                  <td key={archId} className={`text-center py-2 px-2 relative ${qs != null ? scoreBg(qs, 1.0) : ''}`}>
+                    <div className="flex flex-col items-center gap-0.5">
+                      <span className={ok ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
+                        {ok ? 'OK' : 'NG'}
+                      </span>
+                      {qs != null && (
+                        <span className={`text-[10px] font-mono ${scoreColor(qs, 1.0)}`}>
+                          F:{Math.round(qs * 100)}%
+                        </span>
+                      )}
+                      {ls != null && (
+                        <span className={`text-[10px] font-mono ${scoreColor(ls, 10)}`}>
+                          G:{ls.toFixed(1)}
+                        </span>
+                      )}
+                      <div className="flex gap-1 mt-0.5">
+                        {detail && (
+                          <button
+                            onClick={() => setExpandedCell(isExpanded ? null : cellKey)}
+                            className="text-[9px] px-1 py-0.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300"
+                            title="Show details"
+                          >
+                            Details
+                          </button>
+                        )}
+                        {hasFiles && (
+                          <button
+                            onClick={() => handleDownload(archId, caseId)}
+                            className="text-[9px] px-1 py-0.5 rounded bg-blue-900 hover:bg-blue-800 text-blue-300"
+                            title="Download output files"
+                          >
+                            DL
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    {isExpanded && detail && (
+                      <DetailPopup detail={detail} onClose={() => setExpandedCell(null)} />
+                    )}
                   </td>
                 )
               })}
@@ -589,6 +701,11 @@ function SummaryTable({ report, archs }: { report: EvalReport; archs: Architectu
                               F{arch.pipeline.eval_retry_strategy !== 'none' ? `↺${arch.pipeline.eval_retry_strategy}` : ''}
                             </span>
                           )}
+                          {arch.pipeline.llm_eval_debug && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-900/50 text-purple-300 font-mono">
+                              G
+                            </span>
+                          )}
                           <span className="text-xs text-gray-600 ml-1">{arch.model}</span>
                         </div>
                       ) : (
@@ -756,6 +873,308 @@ function CreateTestCaseForm({
         <div className="text-xs text-red-400">{formError}</div>
       )}
     </form>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Category grouping helpers
+// ---------------------------------------------------------------------------
+
+type ArchCategory = 'Baseline' | 'Planner' | 'Mini' | 'Other'
+
+function getArchCategory(id: string): ArchCategory {
+  const lower = id.toLowerCase()
+  if (lower.includes('mini') || lower.startsWith('v8') || lower.startsWith('v9')) return 'Mini'
+  if (lower.includes('planner') || lower.startsWith('v4') || lower.startsWith('v5') || lower.startsWith('v7')) return 'Planner'
+  if (lower.startsWith('v1') || lower.startsWith('v2') || lower.startsWith('v3') || lower.startsWith('v6')) return 'Baseline'
+  return 'Other'
+}
+
+const CATEGORY_ORDER: readonly ArchCategory[] = ['Baseline', 'Planner', 'Mini', 'Other'] as const
+
+function groupArchitectures(archs: readonly Architecture[]): Array<{ category: ArchCategory; items: Architecture[] }> {
+  const grouped = new Map<ArchCategory, Architecture[]>()
+  for (const cat of CATEGORY_ORDER) {
+    grouped.set(cat, [])
+  }
+  for (const a of archs) {
+    const cat = getArchCategory(a.id)
+    grouped.get(cat)!.push(a)
+  }
+  return CATEGORY_ORDER
+    .filter((cat) => (grouped.get(cat)?.length ?? 0) > 0)
+    .map((cat) => ({ category: cat, items: grouped.get(cat)! }))
+}
+
+// ---------------------------------------------------------------------------
+// Phase dot indicator for table rows
+// ---------------------------------------------------------------------------
+
+function PhaseDot({ active, color }: { active: boolean; color: string }) {
+  if (!active) return <span className="inline-block w-2.5 h-2.5" />
+  return <span className={`inline-block w-2.5 h-2.5 rounded-full ${color}`} />
+}
+
+// ---------------------------------------------------------------------------
+// Architecture table with category grouping
+// ---------------------------------------------------------------------------
+
+interface ArchitectureTableProps {
+  archs: Architecture[]
+  selectedArchs: Set<string>
+  toggleArch: (id: string) => void
+  detailArchId: string | null
+  setDetailArchId: (id: string | null) => void
+}
+
+function ArchitectureTable({ archs, selectedArchs, toggleArch, detailArchId, setDetailArchId }: ArchitectureTableProps) {
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<ArchCategory>>(new Set())
+
+  const toggleCategory = (cat: ArchCategory) => {
+    setCollapsedCategories((prev) => {
+      const next = new Set(prev)
+      if (next.has(cat)) next.delete(cat)
+      else next.add(cat)
+      return next
+    })
+  }
+
+  const groups = groupArchitectures(archs)
+
+  const getFStrategy = (a: Architecture): string => {
+    if (!a.pipeline) return a.phases.includes('F') ? 'on' : '-'
+    if (!a.pipeline.eval_debug) return '-'
+    if (a.pipeline.eval_retry_strategy === 'none') return 'none'
+    return a.pipeline.eval_retry_strategy
+  }
+
+  const hasPhase = (a: Architecture, phase: string): boolean => {
+    if (!a.pipeline) return a.phases.includes(phase)
+    switch (phase) {
+      case 'A': return a.pipeline.explore
+      case 'B': return a.pipeline.reflect
+      case 'P': return a.pipeline.decompose
+      case 'C': return true
+      case 'D': return true
+      case 'F': return a.pipeline.eval_debug
+      case 'G': return (a.pipeline as Record<string, unknown>).llm_eval_debug === true
+      default: return false
+    }
+  }
+
+  const getRetryLimit = (a: Architecture): number => {
+    return a.pipeline?.debug_retry_limit ?? a.debug_retry_limit
+  }
+
+  const PHASE_DOT_COLORS: Record<string, string> = {
+    A: 'bg-blue-400',
+    B: 'bg-purple-400',
+    P: 'bg-yellow-400',
+    C: 'bg-green-400',
+    D: 'bg-yellow-400',
+    F: 'bg-pink-400',
+    G: 'bg-violet-400',
+  }
+
+  const TABLE_PHASES = ['A', 'B', 'P', 'C', 'D', 'G'] as const
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead className="sticky top-0 z-10 bg-gray-900">
+          <tr className="border-b border-gray-700">
+            <th className="text-left py-2 px-2 text-gray-500 text-xs w-8" />
+            <th className="text-left py-2 px-2 text-gray-500 text-xs">ID</th>
+            <th className="text-left py-2 px-2 text-gray-500 text-xs">Description</th>
+            <th className="text-left py-2 px-2 text-gray-500 text-xs">Model</th>
+            {TABLE_PHASES.map((p) => (
+              <th key={p} className="text-center py-2 px-1 text-gray-500 text-xs w-8">{p}</th>
+            ))}
+            <th className="text-center py-2 px-2 text-gray-500 text-xs">F strategy</th>
+            <th className="text-center py-2 px-2 text-gray-500 text-xs">Retry</th>
+            <th className="text-center py-2 px-1 text-gray-500 text-xs w-12" />
+          </tr>
+        </thead>
+        <tbody>
+          {groups.map(({ category, items }) => {
+            const isCollapsed = collapsedCategories.has(category)
+            return (
+              <ArchCategoryGroup
+                key={category}
+                category={category}
+                items={items}
+                isCollapsed={isCollapsed}
+                onToggleCategory={() => toggleCategory(category)}
+                selectedArchs={selectedArchs}
+                toggleArch={toggleArch}
+                detailArchId={detailArchId}
+                setDetailArchId={setDetailArchId}
+                hasPhase={hasPhase}
+                getFStrategy={getFStrategy}
+                getRetryLimit={getRetryLimit}
+                phaseDotColors={PHASE_DOT_COLORS}
+                tablePhases={TABLE_PHASES}
+              />
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+interface ArchCategoryGroupProps {
+  category: ArchCategory
+  items: Architecture[]
+  isCollapsed: boolean
+  onToggleCategory: () => void
+  selectedArchs: Set<string>
+  toggleArch: (id: string) => void
+  detailArchId: string | null
+  setDetailArchId: (id: string | null) => void
+  hasPhase: (a: Architecture, phase: string) => boolean
+  getFStrategy: (a: Architecture) => string
+  getRetryLimit: (a: Architecture) => number
+  phaseDotColors: Record<string, string>
+  tablePhases: readonly string[]
+}
+
+function ArchCategoryGroup({
+  category,
+  items,
+  isCollapsed,
+  onToggleCategory,
+  selectedArchs,
+  toggleArch,
+  detailArchId,
+  setDetailArchId,
+  hasPhase,
+  getFStrategy,
+  getRetryLimit,
+  phaseDotColors,
+  tablePhases,
+}: ArchCategoryGroupProps) {
+  // Total columns: checkbox + ID + Desc + Model + 6 phases + F strategy + Retry + Detail = 13
+  const colSpan = 13
+
+  return (
+    <>
+      {/* Category header */}
+      <tr
+        className="border-b border-gray-700 bg-gray-800/60 cursor-pointer hover:bg-gray-800 transition-colors"
+        onClick={onToggleCategory}
+      >
+        <td colSpan={colSpan} className="py-1.5 px-2">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500">{isCollapsed ? '▶' : '▼'}</span>
+            <span className="text-xs font-medium text-gray-300">{category}</span>
+            <span className="text-xs text-gray-600">({items.length})</span>
+          </div>
+        </td>
+      </tr>
+
+      {/* Architecture rows */}
+      {!isCollapsed && items.map((a) => {
+        const isSelected = selectedArchs.has(a.id) || selectedArchs.size === 0
+        const fStrategy = getFStrategy(a)
+        return (
+          <ArchTableRow
+            key={a.id}
+            arch={a}
+            isSelected={isSelected}
+            toggleArch={toggleArch}
+            detailArchId={detailArchId}
+            setDetailArchId={setDetailArchId}
+            hasPhase={hasPhase}
+            fStrategy={fStrategy}
+            retryLimit={getRetryLimit(a)}
+            phaseDotColors={phaseDotColors}
+            tablePhases={tablePhases}
+            colSpan={colSpan}
+          />
+        )
+      })}
+    </>
+  )
+}
+
+interface ArchTableRowProps {
+  arch: Architecture
+  isSelected: boolean
+  toggleArch: (id: string) => void
+  detailArchId: string | null
+  setDetailArchId: (id: string | null) => void
+  hasPhase: (a: Architecture, phase: string) => boolean
+  fStrategy: string
+  retryLimit: number
+  phaseDotColors: Record<string, string>
+  tablePhases: readonly string[]
+  colSpan: number
+}
+
+function ArchTableRow({
+  arch,
+  isSelected,
+  toggleArch,
+  detailArchId,
+  setDetailArchId,
+  hasPhase,
+  fStrategy,
+  retryLimit,
+  phaseDotColors,
+  tablePhases,
+  colSpan,
+}: ArchTableRowProps) {
+  const isDetailOpen = detailArchId === arch.id
+  return (
+    <>
+      <tr
+        className={`border-b border-gray-800 transition-colors cursor-pointer ${
+          isSelected
+            ? 'bg-blue-950/30 border-l-2 border-l-blue-600'
+            : 'opacity-50 hover:opacity-70'
+        }`}
+        onClick={() => toggleArch(arch.id)}
+      >
+        <td className="py-2 px-2 text-center">
+          <span className={`inline-block w-3 h-3 rounded border ${
+            isSelected ? 'bg-blue-600 border-blue-500' : 'border-gray-600'
+          }`} />
+        </td>
+        <td className="py-2 px-2 font-mono text-xs text-gray-200 whitespace-nowrap">{arch.id}</td>
+        <td className="py-2 px-2 text-xs text-gray-400 max-w-[200px] truncate">{arch.description}</td>
+        <td className="py-2 px-2 text-xs text-gray-500 font-mono whitespace-nowrap">{arch.model}</td>
+        {tablePhases.map((p) => (
+          <td key={p} className="py-2 px-1 text-center">
+            <PhaseDot active={hasPhase(arch, p)} color={phaseDotColors[p] ?? 'bg-gray-400'} />
+          </td>
+        ))}
+        <td className="py-2 px-2 text-center text-xs font-mono">
+          {fStrategy === '-' ? (
+            <span className="text-gray-700">-</span>
+          ) : (
+            <span className="text-pink-400">{fStrategy}</span>
+          )}
+        </td>
+        <td className="py-2 px-2 text-center text-xs font-mono text-gray-400">{retryLimit}</td>
+        <td className="py-2 px-1 text-center" onClick={(e) => e.stopPropagation()}>
+          <button
+            onClick={() => setDetailArchId(isDetailOpen ? null : arch.id)}
+            className="text-xs text-gray-500 hover:text-gray-300 px-1 py-0.5 transition-colors"
+            title="Show architecture detail"
+          >
+            {isDetailOpen ? '▼' : '▶'}
+          </button>
+        </td>
+      </tr>
+      {isDetailOpen && (
+        <tr className="border-b border-gray-800">
+          <td colSpan={colSpan} className="px-2 py-2">
+            <ArchDetailPanel arch={arch} />
+          </td>
+        </tr>
+      )}
+    </>
   )
 }
 
@@ -942,64 +1361,13 @@ export function EvalDashboard() {
             ({selectedArchs.size === 0 ? 'all' : selectedArchs.size} selected)
           </span>
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-          {archs.map((a) => (
-            <div key={a.id} className="flex flex-col gap-1">
-              <div
-                className={`text-left p-3 rounded-lg border transition-colors cursor-pointer ${
-                  selectedArchs.has(a.id) || selectedArchs.size === 0
-                    ? 'border-blue-600 bg-blue-950/30'
-                    : 'border-gray-700 bg-gray-800/50 opacity-50'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <button onClick={() => toggleArch(a.id)} className="flex-1 text-left">
-                    <div className="font-mono text-xs text-gray-200">{a.id}</div>
-                    <div className="text-xs text-gray-500 mt-1">{a.description}</div>
-                    {a.pipeline ? (
-                      <div className="flex gap-1 mt-2 flex-wrap">
-                        {a.pipeline.explore && <PhaseTag phase="A" />}
-                        {a.pipeline.reflect && <PhaseTag phase="B" />}
-                        {a.pipeline.decompose ? (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-900/50 text-yellow-300 font-mono">
-                            P→[C.n→D.n]
-                          </span>
-                        ) : (
-                          <>
-                            <PhaseTag phase="C" />
-                            <PhaseTag phase="D" />
-                          </>
-                        )}
-                        {a.pipeline.eval_debug && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-pink-900/50 text-pink-300 font-mono">
-                            F{a.pipeline.eval_retry_strategy !== 'none' ? `↺${a.pipeline.eval_retry_strategy}` : ''}
-                          </span>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="flex gap-1 mt-2">
-                        {a.phases.map((p) => (
-                          <PhaseTag key={p} phase={p} />
-                        ))}
-                      </div>
-                    )}
-                    <div className="text-xs text-gray-600 mt-1">
-                      {a.model} / retry:{a.pipeline?.debug_retry_limit ?? a.debug_retry_limit}
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => setDetailArchId(detailArchId === a.id ? null : a.id)}
-                    className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1 transition-colors"
-                    title="Show architecture detail"
-                  >
-                    {detailArchId === a.id ? '▼' : '▶'} Detail
-                  </button>
-                </div>
-              </div>
-              {detailArchId === a.id && <ArchDetailPanel arch={a} />}
-            </div>
-          ))}
-        </div>
+        <ArchitectureTable
+          archs={archs}
+          selectedArchs={selectedArchs}
+          toggleArch={toggleArch}
+          detailArchId={detailArchId}
+          setDetailArchId={setDetailArchId}
+        />
       </div>
 
       {/* Test case selection */}
@@ -1116,7 +1484,7 @@ export function EvalDashboard() {
 
           <div className="bg-gray-900 rounded-lg p-4 space-y-3">
             <h3 className="text-sm font-medium text-gray-300">Comparison Matrix</h3>
-            <ComparisonMatrix report={viewingReport} />
+            <ComparisonMatrix report={viewingReport} runId={viewingRunId ?? undefined} />
           </div>
 
           {/* Prompt Snapshot */}

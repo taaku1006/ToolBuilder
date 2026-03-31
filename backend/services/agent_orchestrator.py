@@ -21,6 +21,7 @@ from services.sandbox import execute_code
 from services.reflection_engine import run_phase_a, run_phase_b, run_phase_c
 from services.debug_loop import run_debug_loop
 from services.eval_debug_loop import run_eval_debug_loop
+from services.llm_eval_debug_loop import run_llm_eval_debug_loop
 from services.task_planner import run_planner, run_replanner
 from services.xlsx_parser import SheetInfo, build_file_context, parse_file
 from services.langfuse_tracing import OrchestrationTrace
@@ -562,6 +563,75 @@ async def orchestrate(
                 timestamp=_now_iso(),
             )
 
+    # ------------------------------------------------------------------
+    # Phase G — LLM evaluation-driven debug loop (optional)
+    # ------------------------------------------------------------------
+    _check_cancel()
+    llm_eval_retries = 0
+    llm_eval_final_score: float | None = None
+
+    if (
+        settings.llm_eval_loop_enabled
+        and expected_file_path
+        and Path(expected_file_path).exists()
+        and exec_succeeded
+    ):
+        trace.start_phase("G")
+        yield AgentLogEntry(
+            phase="G",
+            action="start",
+            content="Phase G: LLM評価デバッグループを開始します",
+            timestamp=_now_iso(),
+        )
+
+        _tokens_before_g = _token_snapshot()
+
+        llm_eval_debug_result = await run_llm_eval_debug_loop(
+            code=python_code,
+            task=task,
+            expected_file_path=expected_file_path,
+            openai_client=openai_client,
+            sandbox_execute=execute_code,
+            file_id=file_id,
+            file_context=file_context,
+            upload_dir=settings.upload_dir,
+            output_dir=settings.output_dir,
+            timeout=settings.exec_timeout,
+            max_retries=settings.llm_eval_retry_limit,
+            score_threshold=settings.llm_eval_score_threshold,
+            settings=settings,
+        )
+
+        for attempt in llm_eval_debug_result.attempts:
+            yield AgentLogEntry(
+                phase="G",
+                action="retry",
+                content=f"リトライ {attempt.retry_num}: score={attempt.llm_score:.1f}/10 {attempt.reasoning[:100]}",
+                timestamp=_now_iso(),
+            )
+
+        phase_tokens["G"] = _token_snapshot() - _tokens_before_g
+        llm_eval_retries = llm_eval_debug_result.total_retries
+        llm_eval_final_score = llm_eval_debug_result.final_score
+
+        if llm_eval_debug_result.success:
+            python_code = llm_eval_debug_result.final_code
+            trace.end_phase("G", output=f"score={llm_eval_debug_result.final_score:.1f}/10 ({llm_eval_debug_result.total_retries}回リトライ)")
+            yield AgentLogEntry(
+                phase="G",
+                action="complete",
+                content=f"LLM評価スコア {llm_eval_debug_result.final_score:.1f}/10 で合格 ({llm_eval_debug_result.total_retries}回リトライ)",
+                timestamp=_now_iso(),
+            )
+        else:
+            trace.end_phase("G", output=f"score={llm_eval_debug_result.final_score:.1f}/10 閾値未達", status="error")
+            yield AgentLogEntry(
+                phase="G",
+                action="error",
+                content=f"LLM評価スコア {llm_eval_debug_result.final_score:.1f}/10 (閾値: {settings.llm_eval_score_threshold:.1f}) - 改善できませんでした",
+                timestamp=_now_iso(),
+            )
+
     logger.info(
         "Orchestration completed",
         extra={"debug_retries": debug_retries, "exec_succeeded": exec_succeeded},
@@ -576,6 +646,8 @@ async def orchestrate(
             "debug_retries": debug_retries,
             "eval_debug_retries": eval_debug_retries,
             "eval_final_score": eval_final_score,
+            "llm_eval_retries": llm_eval_retries,
+            "llm_eval_final_score": llm_eval_final_score,
             "total_tokens": int(openai_client.total_tokens) if isinstance(openai_client.total_tokens, int) else 0,
             "prompt_tokens": int(openai_client.prompt_tokens) if isinstance(openai_client.prompt_tokens, int) else 0,
             "completion_tokens": int(openai_client.completion_tokens) if isinstance(openai_client.completion_tokens, int) else 0,

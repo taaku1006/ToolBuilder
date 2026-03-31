@@ -1,13 +1,6 @@
 import { useState } from 'react'
 import type { AgentLogEntry } from '../types'
-
-const PHASE_LABELS: Record<string, string> = {
-  A: '探索',
-  B: 'ツール合成',
-  C: 'コード生成',
-  D: '自律デバッグ',
-  E: 'Skills保存',
-}
+import { PHASE_LABELS } from '../constants/phases'
 
 interface PhaseGroup {
   phase: string

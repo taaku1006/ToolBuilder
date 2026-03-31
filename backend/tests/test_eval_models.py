@@ -31,7 +31,7 @@ class TestArchitectureConfig:
     def test_default_baseline(self) -> None:
         cfg = ArchitectureConfig(id="v1_baseline")
         assert cfg.id == "v1_baseline"
-        assert cfg.phases == ["A", "B", "C", "D", "E"]
+        assert cfg.phases == ["A", "B", "P", "C", "D", "F", "G", "E"]
         assert cfg.model == "gpt-4o"
         assert cfg.debug_retry_limit == 3
         assert cfg.temperature == 0.2
@@ -302,7 +302,7 @@ class TestJsonLoading:
 
         cfg = load_architecture(p)
         assert cfg.id == "v_minimal"
-        assert cfg.phases == ["A", "B", "C", "D", "E"]
+        assert cfg.phases == ["A", "B", "P", "C", "D", "F", "G", "E"]
 
     def test_load_test_case_minimal(self, tmp_path: Path) -> None:
         data = {"id": "tc_min", "task": "do something", "description": "desc"}

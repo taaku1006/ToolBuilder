@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     eval_debug_loop_enabled: bool = False
     eval_debug_retry_limit: int = 3
     eval_debug_quality_threshold: float = 0.85
+    llm_eval_loop_enabled: bool = False
+    llm_eval_retry_limit: int = 2
+    llm_eval_score_threshold: float = 7.0
     eval_retry_strategy: str = "none"  # "none" | "restart" | "replan"
     eval_retry_max_loops: int = 2
 

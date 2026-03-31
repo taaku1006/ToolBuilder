@@ -156,6 +156,51 @@ class TestEvalReportEdgeCases:
         report = EvalReport(results)
         assert report.best_architecture() == "v1"
 
+    def test_result_details_with_scores(self) -> None:
+        """result_details returns quality/llm scores and output_files per case/arch."""
+        results = [
+            EvalResult(
+                architecture_id="v1",
+                test_case_id="c1",
+                metrics=EvalMetrics(
+                    success=False,
+                    total_duration_ms=1000,
+                    quality_score=0.71,
+                    quality_details={"missing_sheets": ["Sheet2"], "extra_sheets": [], "error": None},
+                    llm_eval_score=6.7,
+                    llm_eval_details={"semantic_correctness": 7.0, "reasoning": "missing data"},
+                ),
+                agent_log=[],
+                output_files=["/outputs/abc/result.xlsx"],
+            ),
+        ]
+        report = EvalReport(results)
+        details = report.result_details()
+
+        assert "c1" in details
+        assert "v1" in details["c1"]
+        d = details["c1"]["v1"]
+        assert d["quality_score"] == 0.71
+        assert d["llm_eval_score"] == 6.7
+        assert d["quality_details"]["missing_sheets"] == ["Sheet2"]
+        assert d["llm_eval_details"]["reasoning"] == "missing data"
+        assert d["output_files"] == ["/outputs/abc/result.xlsx"]
+
+    def test_to_dict_includes_result_details(self) -> None:
+        results = [
+            EvalResult(
+                architecture_id="v1",
+                test_case_id="c1",
+                metrics=EvalMetrics(success=True, total_duration_ms=1000, quality_score=0.95),
+                agent_log=[],
+                output_files=["/outputs/xyz/out.xlsx"],
+            ),
+        ]
+        report = EvalReport(results)
+        d = report.to_dict()
+        assert "result_details" in d
+        assert d["result_details"]["c1"]["v1"]["output_files"] == ["/outputs/xyz/out.xlsx"]
+
     def test_all_failures(self) -> None:
         results = [
             _result("v1", "c1", success=False, tokens=1000, duration_ms=5000),

@@ -38,9 +38,32 @@ export interface RunStatus {
   report: EvalReport | null
 }
 
+export interface ResultDetail {
+  quality_score: number | null
+  quality_details: {
+    overall_score?: number
+    missing_sheets?: string[]
+    extra_sheets?: string[]
+    sheet_count?: number
+    error?: string | null
+  } | null
+  llm_eval_score: number | null
+  llm_eval_details: {
+    semantic_correctness?: number
+    data_integrity?: number
+    completeness?: number
+    overall?: number
+    reasoning?: string
+  } | null
+  output_files: string[]
+}
+
 export interface EvalReport {
   summary: Record<string, ArchSummary>
   comparison_matrix: Record<string, Record<string, boolean>>
+  quality_matrix?: Record<string, Record<string, number | null>>
+  llm_eval_matrix?: Record<string, Record<string, number | null>>
+  result_details?: Record<string, Record<string, ResultDetail>>
   best_architecture: string | null
   architecture_ids: string[]
   test_case_ids: string[]
@@ -161,5 +184,20 @@ export async function diffRuns(runId: string, otherId: string): Promise<Snapshot
 
 export async function compareRuns(runId: string, baselineId: string): Promise<RunComparisonResult> {
   const res = await client.get<RunComparisonResult>(`/eval/run/${runId}/compare/${baselineId}`)
+  return res.data
+}
+
+export interface ResultFileInfo {
+  path: string
+  name: string
+  size: number
+}
+
+export async function getResultFiles(
+  runId: string,
+  archId: string,
+  caseId: string,
+): Promise<{ architecture_id: string; test_case_id: string; files: ResultFileInfo[] }> {
+  const res = await client.get(`/eval/run/${runId}/result/${archId}/${caseId}/files`)
   return res.data
 }

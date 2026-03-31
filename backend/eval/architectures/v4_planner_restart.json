@@ -1,1 +1,1 @@
-{"id":"v4_planner_restart","pipeline":{"explore":true,"reflect":true,"decompose":true,"debug_retry_limit":3,"eval_debug":true,"eval_retry_strategy":"restart","eval_retry_max_loops":2,"subtask_debug_retries":2},"model":"gpt-4o","description":"Planner + F failure restarts all"}
+{"id":"v4_planner_restart","pipeline":{"explore":true,"reflect":true,"decompose":true,"debug_retry_limit":3,"eval_debug":true,"llm_eval_debug":true,"eval_retry_strategy":"restart","eval_retry_max_loops":2,"subtask_debug_retries":2},"model":"gpt-4o","description":"Planner + F failure restarts all"}

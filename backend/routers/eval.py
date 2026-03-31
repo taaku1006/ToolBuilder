@@ -120,6 +120,9 @@ async def list_architectures() -> list[ArchitectureOut]:
                 "eval_debug": a.pipeline.eval_debug,
                 "eval_retry_strategy": a.pipeline.eval_retry_strategy,
                 "eval_retry_max_loops": a.pipeline.eval_retry_max_loops,
+                "llm_eval_debug": a.pipeline.llm_eval_debug,
+                "llm_eval_score_threshold": a.pipeline.llm_eval_score_threshold,
+                "llm_eval_retry_limit": a.pipeline.llm_eval_retry_limit,
                 "subtask_debug_retries": a.pipeline.subtask_debug_retries,
             } if a.pipeline else None,
         )
@@ -558,3 +561,28 @@ async def diff_run_snapshots(run_id: str, other_id: str) -> dict:
         "changed_configs": diff.changed_configs,
         "is_identical": diff.is_identical,
     }
+
+
+@router.get("/eval/run/{run_id}/result/{arch_id}/{case_id}/files")
+async def get_result_files(run_id: str, arch_id: str, case_id: str) -> dict:
+    """Return output file paths for a specific eval result."""
+    summary_path = _RESULTS_DIR / f"run_{run_id}" / "summary.json"
+    if not summary_path.exists():
+        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
+
+    raw = json.loads(summary_path.read_text(encoding="utf-8"))
+    for item in raw.get("results", []):
+        if item["architecture_id"] == arch_id and item["test_case_id"] == case_id:
+            files = item.get("output_files", [])
+            # Filter to files that still exist
+            existing = [f for f in files if Path(f).exists()]
+            return {
+                "architecture_id": arch_id,
+                "test_case_id": case_id,
+                "files": [
+                    {"path": f, "name": Path(f).name, "size": Path(f).stat().st_size}
+                    for f in existing
+                ],
+            }
+
+    raise HTTPException(status_code=404, detail=f"Result not found for {arch_id}/{case_id}")
