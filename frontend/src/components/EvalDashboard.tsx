@@ -505,8 +505,10 @@ function SummaryTable({ report, archs }: { report: EvalReport; archs: Architectu
 
 function CreateTestCaseForm({
   onCreated,
+  onClose,
 }: {
   onCreated: () => void
+  onClose: () => void
 }) {
   const [task, setTask] = useState('')
   const [description, setDescription] = useState('')
@@ -531,6 +533,7 @@ function CreateTestCaseForm({
       if (fileRef.current) fileRef.current.value = ''
       if (expectedFileRef.current) expectedFileRef.current.value = ''
       onCreated()
+      onClose()
     } catch (err: unknown) {
       setFormError(err instanceof Error ? err.message : 'Failed to create')
     } finally {
@@ -540,7 +543,10 @@ function CreateTestCaseForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3 border border-gray-700 rounded-lg p-4 bg-gray-800/50">
-      <div className="text-xs font-medium text-gray-400 uppercase tracking-wide">New Test Case</div>
+      <div className="flex items-center justify-between">
+        <div className="text-xs font-medium text-gray-400 uppercase tracking-wide">New Test Case</div>
+        <button type="button" onClick={onClose} className="text-xs text-gray-600 hover:text-gray-400 transition-colors">✕</button>
+      </div>
 
       <textarea
         placeholder="タスク指示文 (e.g. 月次品質報告書を全自動生成するコードを作ってください...)"
@@ -654,6 +660,7 @@ export function EvalDashboard() {
   const [compareBaselineId, setCompareBaselineId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showAddCase, setShowAddCase] = useState(false)
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -855,61 +862,92 @@ export function EvalDashboard() {
 
       {/* Test case selection */}
       <div className="bg-gray-900 rounded-lg p-4 space-y-3">
-        <h3 className="text-sm font-medium text-gray-300">
-          Test Cases
-          <span className="text-gray-500 ml-2 font-normal">
-            ({selectedCases.size === 0 ? 'all' : selectedCases.size} selected)
-          </span>
-        </h3>
-
-        <CreateTestCaseForm onCreated={reloadCases} />
-
-        <div className="space-y-2">
-          {cases.map((c) => (
-            <div
-              key={c.id}
-              className={`p-3 rounded-lg border transition-colors ${
-                selectedCases.has(c.id) || selectedCases.size === 0
-                  ? 'border-blue-600 bg-blue-950/30'
-                  : 'border-gray-700 bg-gray-800/50 opacity-50'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => toggleCase(c.id)}
-                  className="flex-1 text-left"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono text-xs text-gray-400">
-                      {c.id.length > 12 ? c.id.slice(0, 8) + '...' : c.id}
-                    </span>
-                    <span className="text-sm text-gray-200">{c.task}</span>
-                    {c.file_path && (
-                      <span className="text-xs px-1.5 py-0.5 bg-indigo-900 text-indigo-300 rounded">
-                        input
-                      </span>
-                    )}
-                    {c.expected_file_path && (
-                      <span className="text-xs px-1.5 py-0.5 bg-green-900 text-green-300 rounded">
-                        expected
-                      </span>
-                    )}
-                  </div>
-                  {c.description && (
-                    <div className="text-xs text-gray-500 mt-1">{c.description}</div>
-                  )}
-                </button>
-                <button
-                  onClick={() => handleDeleteCase(c.id)}
-                  className="text-xs text-gray-600 hover:text-red-400 transition-colors px-2 py-1"
-                  title="Delete test case"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          ))}
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-medium text-gray-300">
+            Test Cases
+            <span className="text-gray-500 ml-2 font-normal">
+              ({selectedCases.size === 0 ? 'all' : selectedCases.size} selected)
+            </span>
+          </h3>
+          <button
+            type="button"
+            onClick={() => setShowAddCase((v) => !v)}
+            className="text-xs px-2.5 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors"
+          >
+            {showAddCase ? '✕ Cancel' : '+ Add'}
+          </button>
         </div>
+
+        {showAddCase && (
+          <CreateTestCaseForm onCreated={reloadCases} onClose={() => setShowAddCase(false)} />
+        )}
+
+        {cases.length === 0 ? (
+          <div className="text-xs text-gray-600 py-2">No test cases yet. Click "+ Add" to create one.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-700">
+                  <th className="text-left py-1.5 px-2 text-gray-500 text-xs w-8" />
+                  <th className="text-left py-1.5 px-2 text-gray-500 text-xs">Label</th>
+                  <th className="text-left py-1.5 px-2 text-gray-500 text-xs">Task</th>
+                  <th className="text-center py-1.5 px-2 text-gray-500 text-xs">Input</th>
+                  <th className="text-center py-1.5 px-2 text-gray-500 text-xs">Expected</th>
+                  <th className="text-center py-1.5 px-1 text-gray-500 text-xs w-12" />
+                </tr>
+              </thead>
+              <tbody>
+                {cases.map((c) => {
+                  const isSelected = selectedCases.has(c.id) || selectedCases.size === 0
+                  const label = c.description || c.id.slice(0, 8) + '...'
+                  const taskPreview = c.task.length > 60 ? c.task.slice(0, 60) + '…' : c.task
+                  return (
+                    <tr
+                      key={c.id}
+                      className={`border-b border-gray-800 transition-colors cursor-pointer ${
+                        isSelected ? 'bg-blue-950/20' : 'opacity-40 hover:opacity-60'
+                      }`}
+                      onClick={() => toggleCase(c.id)}
+                      title={c.task}
+                    >
+                      <td className="py-2 px-2 text-center">
+                        <span className={`inline-block w-3 h-3 rounded border ${
+                          isSelected ? 'bg-blue-600 border-blue-500' : 'border-gray-600'
+                        }`} />
+                      </td>
+                      <td className="py-2 px-2 text-xs font-medium text-gray-200 whitespace-nowrap max-w-[160px] truncate">
+                        {label}
+                      </td>
+                      <td className="py-2 px-2 text-xs text-gray-400 max-w-[320px] truncate">
+                        {taskPreview}
+                      </td>
+                      <td className="py-2 px-2 text-center">
+                        {c.file_path
+                          ? <span className="inline-block w-2 h-2 rounded-full bg-indigo-400" title="Input file attached" />
+                          : <span className="inline-block w-2 h-2 rounded-full bg-gray-700" />}
+                      </td>
+                      <td className="py-2 px-2 text-center">
+                        {c.expected_file_path
+                          ? <span className="inline-block w-2 h-2 rounded-full bg-green-400" title="Expected file attached" />
+                          : <span className="inline-block w-2 h-2 rounded-full bg-gray-700" />}
+                      </td>
+                      <td className="py-2 px-1 text-center" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={() => handleDeleteCase(c.id)}
+                          className="text-xs text-gray-600 hover:text-red-400 transition-colors px-1"
+                          title="Delete test case"
+                        >
+                          ✕
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Run button + progress */}
