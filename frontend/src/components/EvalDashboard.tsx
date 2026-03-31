@@ -355,52 +355,150 @@ function scoreBg(score: number, max: number): string {
   return 'bg-red-900/20'
 }
 
-function DetailPopup({ detail, onClose }: { detail: ResultDetail; onClose: () => void }) {
+function ScoreBar({ value, max, colorClass }: { value: number; max: number; colorClass: string }) {
+  const pct = Math.round((value / max) * 100)
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex-1 bg-gray-700 rounded-full h-1.5">
+        <div className={`h-1.5 rounded-full ${colorClass}`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className="text-xs font-mono w-10 text-right">{max === 10 ? `${value.toFixed(1)}/10` : `${pct}%`}</span>
+    </div>
+  )
+}
+
+function DetailDrawer({
+  detail,
+  archId,
+  caseLabel,
+  onClose,
+  onDownload,
+}: {
+  detail: ResultDetail
+  archId: string
+  caseLabel: string
+  onClose: () => void
+  onDownload?: () => void
+}) {
   const qd = detail.quality_details
   const ld = detail.llm_eval_details
+  const qs = detail.quality_score ?? 0
+  const ls = detail.llm_eval_score
+
   return (
-    <div className="absolute z-50 top-full left-1/2 -translate-x-1/2 mt-1 w-80 bg-gray-800 border border-gray-600 rounded-lg p-3 shadow-xl text-left">
-      <button onClick={onClose} className="absolute top-1 right-2 text-gray-500 hover:text-gray-300 text-xs">x</button>
-      <div className="text-xs space-y-2">
-        {qd && (
-          <div>
-            <div className="font-semibold text-pink-300 mb-1">F: Mechanical ({Math.round((detail.quality_score ?? 0) * 100)}%)</div>
-            {qd.missing_sheets && qd.missing_sheets.length > 0 && (
-              <div className="text-red-400">Missing: {qd.missing_sheets.join(', ')}</div>
-            )}
-            {qd.extra_sheets && qd.extra_sheets.length > 0 && (
-              <div className="text-yellow-400">Extra: {qd.extra_sheets.join(', ')}</div>
-            )}
-            {qd.error && <div className="text-red-400">Error: {qd.error}</div>}
+    <>
+      {/* Backdrop */}
+      <div className="fixed inset-0 z-40 bg-black/50" onClick={onClose} />
+      {/* Drawer */}
+      <div className="fixed right-0 top-0 h-full w-[420px] z-50 bg-gray-900 border-l border-gray-700 flex flex-col shadow-2xl">
+        {/* Header */}
+        <div className="flex items-start justify-between px-4 py-3 border-b border-gray-700">
+          <div className="min-w-0">
+            <div className="text-xs text-gray-500 font-mono truncate">{archId}</div>
+            <div className="text-sm text-gray-200 mt-0.5 truncate">{caseLabel}</div>
           </div>
-        )}
-        {ld && (
-          <div>
-            <div className="font-semibold text-purple-300 mb-1">G: LLM Eval ({detail.llm_eval_score?.toFixed(1)}/10)</div>
-            <div className="grid grid-cols-3 gap-1 text-[10px]">
-              <span>Semantic: {ld.semantic_correctness}/10</span>
-              <span>Integrity: {ld.data_integrity}/10</span>
-              <span>Complete: {ld.completeness}/10</span>
+          <button onClick={onClose} className="ml-3 text-gray-500 hover:text-gray-200 text-lg leading-none flex-shrink-0">
+            &times;
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-5 text-sm">
+          {/* F: Mechanical */}
+          {qd && (
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="font-semibold text-pink-300">F: Mechanical</span>
+                <span className={`text-xs font-mono ${scoreColor(qs, 1.0)}`}>{Math.round(qs * 100)}%</span>
+              </div>
+              <ScoreBar value={qs} max={1.0} colorClass={qs >= 0.85 ? 'bg-green-500' : qs >= 0.6 ? 'bg-yellow-500' : 'bg-red-500'} />
+              {qd.missing_sheets && qd.missing_sheets.length > 0 && (
+                <div className="mt-2">
+                  <div className="text-xs text-gray-500 mb-1">Missing sheets</div>
+                  <ul className="list-disc list-inside space-y-0.5">
+                    {qd.missing_sheets.map((s) => (
+                      <li key={s} className="text-xs text-red-400 font-mono">{s}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {qd.extra_sheets && qd.extra_sheets.length > 0 && (
+                <div className="mt-2">
+                  <div className="text-xs text-gray-500 mb-1">Extra sheets</div>
+                  <ul className="list-disc list-inside space-y-0.5">
+                    {qd.extra_sheets.map((s) => (
+                      <li key={s} className="text-xs text-yellow-400 font-mono">{s}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {qd.error && (
+                <div className="mt-2 text-xs text-red-400 bg-red-900/20 rounded p-2">{qd.error}</div>
+              )}
             </div>
-            {ld.reasoning && (
-              <div className="mt-1 text-gray-400 leading-tight max-h-24 overflow-y-auto">{ld.reasoning}</div>
-            )}
+          )}
+
+          {/* G: LLM Eval */}
+          {ld && ls != null && (
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="font-semibold text-purple-300">G: LLM Eval</span>
+                <span className={`text-xs font-mono ${scoreColor(ls, 10)}`}>{ls.toFixed(1)}/10</span>
+              </div>
+              <ScoreBar value={ls} max={10} colorClass={ls >= 8.5 ? 'bg-green-500' : ls >= 6 ? 'bg-yellow-500' : 'bg-red-500'} />
+              <div className="mt-3 space-y-2">
+                <div>
+                  <div className="text-xs text-gray-500 mb-1">Semantic Correctness</div>
+                  <ScoreBar value={ld.semantic_correctness} max={10} colorClass={ld.semantic_correctness >= 8.5 ? 'bg-green-500' : ld.semantic_correctness >= 6 ? 'bg-yellow-500' : 'bg-red-500'} />
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500 mb-1">Data Integrity</div>
+                  <ScoreBar value={ld.data_integrity} max={10} colorClass={ld.data_integrity >= 8.5 ? 'bg-green-500' : ld.data_integrity >= 6 ? 'bg-yellow-500' : 'bg-red-500'} />
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500 mb-1">Completeness</div>
+                  <ScoreBar value={ld.completeness} max={10} colorClass={ld.completeness >= 8.5 ? 'bg-green-500' : ld.completeness >= 6 ? 'bg-yellow-500' : 'bg-red-500'} />
+                </div>
+              </div>
+              {ld.reasoning && (
+                <div className="mt-3">
+                  <div className="text-xs text-gray-500 mb-1">Reasoning</div>
+                  <div className="text-xs text-gray-300 leading-relaxed bg-gray-800 rounded p-3">{ld.reasoning}</div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        {onDownload && (
+          <div className="px-4 py-3 border-t border-gray-700">
+            <button
+              onClick={onDownload}
+              className="w-full py-2 rounded bg-blue-800 hover:bg-blue-700 text-blue-200 text-sm"
+            >
+              Download Output Files
+            </button>
           </div>
         )}
       </div>
-    </div>
+    </>
   )
 }
 
 function ComparisonMatrix({
   report,
   runId,
+  cases,
 }: {
   report: EvalReport
   runId?: string
+  cases?: EvalTestCase[]
 }) {
   const { comparison_matrix, result_details, architecture_ids, test_case_ids } = report
-  const [expandedCell, setExpandedCell] = useState<string | null>(null)
+  const [drawerCell, setDrawerCell] = useState<string | null>(null)
+
+  const caseMap = new Map(cases?.map((c) => [c.id, c.description ?? c.id]) ?? [])
 
   const handleDownload = async (archId: string, caseId: string) => {
     if (!runId) return
@@ -414,80 +512,97 @@ function ComparisonMatrix({
     }
   }
 
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-gray-700">
-            <th className="text-left py-2 px-3 text-gray-400">Test Case</th>
-            {architecture_ids.map((a) => (
-              <th key={a} className="text-center py-2 px-3 text-gray-400 font-mono text-xs">
-                {a}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {test_case_ids.map((caseId) => (
-            <tr key={caseId} className="border-b border-gray-800">
-              <td className="py-2 px-3 text-gray-300 font-mono text-xs">{caseId}</td>
-              {architecture_ids.map((archId) => {
-                const ok = comparison_matrix[caseId]?.[archId]
-                const detail = result_details?.[caseId]?.[archId]
-                const cellKey = `${caseId}__${archId}`
-                const isExpanded = expandedCell === cellKey
-                const qs = detail?.quality_score
-                const ls = detail?.llm_eval_score
-                const hasFiles = detail?.output_files && detail.output_files.length > 0
+  const drawerCellParts = drawerCell?.split('__')
+  const drawerCaseId = drawerCellParts?.[0]
+  const drawerArchId = drawerCellParts?.[1]
+  const drawerDetail = drawerCaseId && drawerArchId ? result_details?.[drawerCaseId]?.[drawerArchId] : undefined
 
-                return (
-                  <td key={archId} className={`text-center py-2 px-2 relative ${qs != null ? scoreBg(qs, 1.0) : ''}`}>
-                    <div className="flex flex-col items-center gap-0.5">
-                      <span className={ok ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
-                        {ok ? 'OK' : 'NG'}
-                      </span>
-                      {qs != null && (
-                        <span className={`text-[10px] font-mono ${scoreColor(qs, 1.0)}`}>
-                          F:{Math.round(qs * 100)}%
+  return (
+    <>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-gray-700">
+              <th className="text-left py-2 px-3 text-gray-400">Test Case</th>
+              {architecture_ids.map((a) => (
+                <th key={a} className="text-center py-2 px-3 text-gray-400 font-mono text-xs">
+                  {a}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {test_case_ids.map((caseId) => (
+              <tr key={caseId} className="border-b border-gray-800 hover:bg-gray-800/30">
+                <td className="py-2 px-3 text-gray-300 text-xs max-w-[160px]">
+                  <div className="truncate" title={caseId}>{caseMap.get(caseId) ?? caseId}</div>
+                </td>
+                {architecture_ids.map((archId) => {
+                  const ok = comparison_matrix[caseId]?.[archId]
+                  const detail = result_details?.[caseId]?.[archId]
+                  const cellKey = `${caseId}__${archId}`
+                  const qs = detail?.quality_score
+                  const ls = detail?.llm_eval_score
+                  const hasFiles = detail?.output_files && detail.output_files.length > 0
+
+                  return (
+                    <td
+                      key={archId}
+                      className={`text-center py-2 px-2 ${qs != null ? scoreBg(qs, 1.0) : ''}`}
+                    >
+                      <div className="flex flex-col items-center gap-0.5">
+                        <span className={ok ? 'text-green-400 font-bold text-xs' : 'text-red-400 font-bold text-xs'}>
+                          {ok ? 'OK' : 'NG'}
                         </span>
-                      )}
-                      {ls != null && (
-                        <span className={`text-[10px] font-mono ${scoreColor(ls, 10)}`}>
-                          G:{ls.toFixed(1)}
-                        </span>
-                      )}
-                      <div className="flex gap-1 mt-0.5">
+                        {qs != null && (
+                          <span className={`text-[10px] font-mono ${scoreColor(qs, 1.0)}`}>
+                            {Math.round(qs * 100)}%
+                          </span>
+                        )}
+                        {ls != null && (
+                          <span className={`text-[10px] font-mono ${scoreColor(ls, 10)}`}>
+                            {ls.toFixed(1)}
+                          </span>
+                        )}
                         {detail && (
                           <button
-                            onClick={() => setExpandedCell(isExpanded ? null : cellKey)}
-                            className="text-[9px] px-1 py-0.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300"
-                            title="Show details"
+                            onClick={() => setDrawerCell(cellKey)}
+                            className="text-[9px] px-1.5 py-0.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 mt-0.5"
                           >
-                            Details
+                            Detail
                           </button>
                         )}
-                        {hasFiles && (
+                        {!detail && hasFiles && (
                           <button
                             onClick={() => handleDownload(archId, caseId)}
-                            className="text-[9px] px-1 py-0.5 rounded bg-blue-900 hover:bg-blue-800 text-blue-300"
-                            title="Download output files"
+                            className="text-[9px] px-1.5 py-0.5 rounded bg-blue-900 hover:bg-blue-800 text-blue-300 mt-0.5"
                           >
                             DL
                           </button>
                         )}
                       </div>
-                    </div>
-                    {isExpanded && detail && (
-                      <DetailPopup detail={detail} onClose={() => setExpandedCell(null)} />
-                    )}
-                  </td>
-                )
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {drawerCell && drawerDetail && drawerCaseId && drawerArchId && (
+        <DetailDrawer
+          detail={drawerDetail}
+          archId={drawerArchId}
+          caseLabel={caseMap.get(drawerCaseId) ?? drawerCaseId}
+          onClose={() => setDrawerCell(null)}
+          onDownload={drawerDetail.output_files && drawerDetail.output_files.length > 0
+            ? () => handleDownload(drawerArchId, drawerCaseId)
+            : undefined
+          }
+        />
+      )}
+    </>
   )
 }
 
@@ -1522,7 +1637,7 @@ export function EvalDashboard() {
 
           <div className="bg-gray-900 rounded-lg p-4 space-y-3">
             <h3 className="text-sm font-medium text-gray-300">Comparison Matrix</h3>
-            <ComparisonMatrix report={viewingReport} runId={viewingRunId ?? undefined} />
+            <ComparisonMatrix report={viewingReport} runId={viewingRunId ?? undefined} cases={cases} />
           </div>
 
           {/* Prompt Snapshot */}
