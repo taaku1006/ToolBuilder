@@ -16,9 +16,9 @@ from core.config import Settings
 from core.deps import get_settings
 from schemas.generate import AgentLogEntry as AgentLogEntrySchema
 from schemas.generate import GenerateRequest, GenerateResponse
-from services.openai_client import OpenAIClient
-from services.prompt_builder import SYSTEM_PROMPT, build_user_prompt
-from services.xlsx_parser import SheetInfo, build_file_context, parse_file
+from infra.openai_client import OpenAIClient
+from infra.prompt_builder import SYSTEM_PROMPT, build_user_prompt
+from excel.xlsx_parser import SheetInfo, build_file_context, parse_file
 
 router = APIRouter()
 
@@ -120,7 +120,7 @@ def _sse_response(request: GenerateRequest, settings: Settings) -> StreamingResp
     """Return an SSE StreamingResponse that streams orchestration progress."""
 
     async def event_stream():  # noqa: ANN202
-        from services.agent_orchestrator import orchestrate
+        from pipeline.agent_orchestrator import orchestrate
 
         async for entry in orchestrate(
             task=request.task,

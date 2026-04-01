@@ -11,9 +11,9 @@ import json
 import logging
 from dataclasses import dataclass
 
-from services.openai_client import OpenAIClient
-from services.prompt_loader import load_prompt
-from services.sandbox import ExecutionResult
+from infra.openai_client import OpenAIClient
+from infra.prompt_loader import load_prompt
+from infra.sandbox import ExecutionResult
 
 logger = logging.getLogger(__name__)
 

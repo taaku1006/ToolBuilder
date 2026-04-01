@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 from core.config import Settings
 from core.deps import get_settings
 from schemas.execute import ExecuteRequest, ExecuteResponse
-from services.sandbox import execute_code
+from infra.sandbox import execute_code
 
 router = APIRouter()
 

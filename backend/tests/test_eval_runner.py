@@ -325,7 +325,7 @@ class TestEvalRunnerFullRun:
 
         applied_settings = {}
 
-        async def mock_orchestrate(task, file_id, settings, expected_file_path=None, cancel_check=None):
+        async def mock_orchestrate(task, file_id, settings, expected_file_path=None, cancel_check=None, rubric=None):
             applied_settings["reflection_enabled"] = settings.reflection_enabled
             applied_settings["debug_loop_enabled"] = settings.debug_loop_enabled
             applied_settings["openai_model"] = settings.openai_model

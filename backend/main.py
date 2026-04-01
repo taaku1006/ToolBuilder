@@ -33,7 +33,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Seed prompts into Langfuse if enabled
     if settings.langfuse_enabled:
         try:
-            from services.prompt_manager import seed_prompts
+            from infra.prompt_manager import seed_prompts
             seed_prompts(settings)
         except Exception:
             logger.warning("Failed to seed prompts into Langfuse, continuing without it", exc_info=True)

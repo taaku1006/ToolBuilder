@@ -145,7 +145,7 @@ class TestOrchestratePhaseTokens:
     @pytest.mark.asyncio
     async def test_result_payload_includes_phase_tokens(self) -> None:
         """The Phase C complete payload must contain phase_tokens dict."""
-        from services.agent_orchestrator import orchestrate
+        from pipeline.agent_orchestrator import orchestrate
 
         mock_settings = MagicMock()
         mock_settings.reflection_enabled = False
@@ -165,7 +165,7 @@ class TestOrchestratePhaseTokens:
             "tips": "",
         })
 
-        with patch("services.agent_orchestrator.OpenAIClient") as mock_client_cls:
+        with patch("pipeline.agent_orchestrator.OpenAIClient") as mock_client_cls:
             mock_client = MagicMock()
             mock_client.generate_code.return_value = mock_response
             # Use real ints so isinstance checks pass
@@ -189,7 +189,7 @@ class TestOrchestratePhaseTokens:
     @pytest.mark.asyncio
     async def test_phase_c_token_delta_is_tracked(self) -> None:
         """When only Phase C runs, phase_tokens['C'] should equal total tokens used."""
-        from services.agent_orchestrator import orchestrate
+        from pipeline.agent_orchestrator import orchestrate
 
         mock_settings = MagicMock()
         mock_settings.reflection_enabled = False
@@ -228,7 +228,7 @@ class TestOrchestratePhaseTokens:
                 self.__class__.api_calls += 1
                 return mock_response
 
-        with patch("services.agent_orchestrator.OpenAIClient", return_value=FakeClient()):
+        with patch("pipeline.agent_orchestrator.OpenAIClient", return_value=FakeClient()):
             entries = []
             async for entry in orchestrate("task", None, mock_settings):
                 entries.append(entry)
@@ -244,7 +244,7 @@ class TestOrchestratePhaseTokens:
     @pytest.mark.asyncio
     async def test_all_phases_tracked_when_reflection_enabled(self) -> None:
         """When A, B, C all run, phase_tokens should include keys for each."""
-        from services.agent_orchestrator import orchestrate
+        from pipeline.agent_orchestrator import orchestrate
 
         mock_settings = MagicMock()
         mock_settings.reflection_enabled = True
@@ -298,11 +298,11 @@ class TestOrchestratePhaseTokens:
         file_id = "test-file-id"
 
         with (
-            patch("services.agent_orchestrator.OpenAIClient", return_value=CountingClient()),
-            patch("services.agent_orchestrator._resolve_file_context", return_value="file context"),
-            patch("services.phase_handlers.run_phase_a", return_value=phase_a_result) as mock_a,
-            patch("services.phase_handlers.run_phase_b", return_value=phase_b_result) as mock_b,
-            patch("services.agent_orchestrator.run_phase_c") as mock_c,
+            patch("pipeline.agent_orchestrator.OpenAIClient", return_value=CountingClient()),
+            patch("pipeline.agent_orchestrator._resolve_file_context", return_value="file context"),
+            patch("pipeline.phase_handlers.run_phase_a", return_value=phase_a_result) as mock_a,
+            patch("pipeline.phase_handlers.run_phase_b", return_value=phase_b_result) as mock_b,
+            patch("pipeline.agent_orchestrator.run_phase_c") as mock_c,
         ):
             # run_phase_a and run_phase_b are async — make them awaitable
             import asyncio

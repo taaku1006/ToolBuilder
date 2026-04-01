@@ -9,12 +9,12 @@ from unittest.mock import MagicMock
 import pandas as pd
 import pytest
 
-from services.eval_debug_loop import (
+from pipeline.eval_debug_loop import (
     EvalDebugAttempt,
     EvalDebugResult,
     run_eval_debug_loop,
 )
-from services.sandbox import ExecutionResult
+from infra.sandbox import ExecutionResult
 
 
 def _write_xlsx(path: Path, data: dict[str, list]) -> str:

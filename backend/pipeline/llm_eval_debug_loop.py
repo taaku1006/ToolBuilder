@@ -11,12 +11,13 @@ import asyncio
 import logging
 from dataclasses import dataclass
 
-from services.eval_agent import EvalAgentResult, evaluate_output
-from services.excel_comparator import find_best_output_match
-from services.openai_client import OpenAIClient
-from services.prompt_loader import load_prompt
-from services.sandbox import ExecutionResult
-from services.xlsx_parser import build_file_context, parse_file
+from evaluation.eval_agent import EvalAgentResult, evaluate_output
+from evaluation.excel_comparator import find_best_output_match
+from infra.openai_client import OpenAIClient
+from infra.prompt_loader import load_prompt
+from infra.sandbox import ExecutionResult
+from evaluation.structured_comparator import compare_excel_structured
+from excel.xlsx_parser import build_file_context, parse_file
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +101,7 @@ async def run_llm_eval_debug_loop(
     max_retries: int = 2,
     score_threshold: float = 7.0,
     settings=None,
+    rubric: dict | None = None,
 ) -> LlmEvalDebugResult:
     """Execute code and retry when LLM evaluation score is below threshold.
 
@@ -183,9 +185,20 @@ async def run_llm_eval_debug_loop(
             attempts=[], total_retries=0, final_eval=None,
         )
 
+    def _structured_report(path: str) -> str | None:
+        if not rubric:
+            return None
+        try:
+            sc_report = compare_excel_structured(path, expected_file_path, rubric=rubric)
+            return sc_report.summary_text()
+        except Exception:
+            logger.warning("Structured comparator failed in LLM eval debug loop", exc_info=True)
+            return None
+
     eval_result = await asyncio.to_thread(
         evaluate_output, task=task, actual_path=actual_path,
         expected_path=expected_file_path, settings=settings,
+        structured_report=_structured_report(actual_path),
     )
 
     if eval_result is None:
@@ -255,6 +268,7 @@ async def run_llm_eval_debug_loop(
         eval_result = await asyncio.to_thread(
             evaluate_output, task=task, actual_path=actual_path,
             expected_path=expected_file_path, settings=settings,
+            structured_report=_structured_report(actual_path),
         )
 
         if eval_result is None:

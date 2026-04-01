@@ -11,11 +11,12 @@ import asyncio
 import logging
 from dataclasses import dataclass
 
-from services.excel_comparator import ComparisonResult, compare_excel_files, find_best_output_match
-from services.openai_client import OpenAIClient
-from services.prompt_loader import load_prompt
-from services.sandbox import ExecutionResult
-from services.xlsx_parser import build_file_context, parse_file
+from evaluation.excel_comparator import ComparisonResult, compare_excel_files, find_best_output_match
+from infra.openai_client import OpenAIClient
+from infra.prompt_loader import load_prompt
+from infra.sandbox import ExecutionResult
+from evaluation.structured_comparator import compare_excel_structured
+from excel.xlsx_parser import build_file_context, parse_file
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +116,7 @@ async def run_eval_debug_loop(
     max_retries: int = 3,
     quality_threshold: float = 0.85,
     settings=None,
+    rubric: dict | None = None,
 ) -> EvalDebugResult:
     """Execute code and retry when output quality is below threshold.
 
@@ -212,7 +214,15 @@ async def run_eval_debug_loop(
     # First iteration: get LLM evaluation for rich feedback
     if settings is not None:
         try:
-            from services.eval_agent import evaluate_output
+            from evaluation.eval_agent import evaluate_output
+
+            structured_report: str | None = None
+            if rubric:
+                try:
+                    sc_report = compare_excel_structured(actual_path, expected_file_path, rubric=rubric)
+                    structured_report = sc_report.summary_text()
+                except Exception:
+                    logger.warning("Structured comparator failed in eval debug loop", exc_info=True)
 
             eval_result = await asyncio.to_thread(
                 evaluate_output,
@@ -220,6 +230,7 @@ async def run_eval_debug_loop(
                 actual_path=actual_path,
                 expected_path=expected_file_path,
                 settings=settings,
+                structured_report=structured_report,
             )
             if eval_result is not None:
                 eval_reasoning = (

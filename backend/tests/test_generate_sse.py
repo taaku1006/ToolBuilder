@@ -142,7 +142,7 @@ class TestGenerateJsonMode:
         settings = _make_settings(reflection_enabled=False)
         client = self._make_client(settings)
 
-        with patch("services.openai_client.OpenAI") as mock_openai:
+        with patch("infra.openai_client.OpenAI") as mock_openai:
             mock_instance = MagicMock()
             mock_openai.return_value = mock_instance
             mock_choice = MagicMock()
@@ -166,7 +166,7 @@ class TestGenerateJsonMode:
         settings = _make_settings(reflection_enabled=False)
         client = self._make_client(settings)
 
-        with patch("services.openai_client.OpenAI") as mock_openai:
+        with patch("infra.openai_client.OpenAI") as mock_openai:
             mock_instance = MagicMock()
             mock_openai.return_value = mock_instance
             mock_choice = MagicMock()
@@ -197,7 +197,7 @@ class TestGenerateJsonMode:
         settings = _make_settings(reflection_enabled=False)
         client = self._make_client(settings)
 
-        with patch("services.openai_client.OpenAI") as mock_openai:
+        with patch("infra.openai_client.OpenAI") as mock_openai:
             mock_instance = MagicMock()
             mock_openai.return_value = mock_instance
             mock_choice = MagicMock()
@@ -238,7 +238,7 @@ class TestGenerateSseMode:
         settings = _make_settings(reflection_enabled=False)
         client = self._make_client(settings)
 
-        with patch("services.openai_client.OpenAI") as mock_openai:
+        with patch("infra.openai_client.OpenAI") as mock_openai:
             mock_instance = MagicMock()
             mock_openai.return_value = mock_instance
             mock_choice = MagicMock()
@@ -263,7 +263,7 @@ class TestGenerateSseMode:
         settings = _make_settings(reflection_enabled=False)
         client = self._make_client(settings)
 
-        with patch("services.openai_client.OpenAI") as mock_openai:
+        with patch("infra.openai_client.OpenAI") as mock_openai:
             mock_instance = MagicMock()
             mock_openai.return_value = mock_instance
             mock_choice = MagicMock()
@@ -288,7 +288,7 @@ class TestGenerateSseMode:
         settings = _make_settings(reflection_enabled=False)
         client = self._make_client(settings)
 
-        with patch("services.openai_client.OpenAI") as mock_openai:
+        with patch("infra.openai_client.OpenAI") as mock_openai:
             mock_instance = MagicMock()
             mock_openai.return_value = mock_instance
             mock_choice = MagicMock()
@@ -326,7 +326,7 @@ class TestGenerateSseMode:
 
         expected_code = "print('sse test code')"
 
-        with patch("services.openai_client.OpenAI") as mock_openai:
+        with patch("infra.openai_client.OpenAI") as mock_openai:
             mock_instance = MagicMock()
             mock_openai.return_value = mock_instance
             mock_choice = MagicMock()
@@ -367,7 +367,7 @@ class TestGenerateSseMode:
         settings = _make_settings(reflection_enabled=False)
         client = self._make_client(settings)
 
-        with patch("services.openai_client.OpenAI") as mock_openai:
+        with patch("infra.openai_client.OpenAI") as mock_openai:
             mock_instance = MagicMock()
             mock_openai.return_value = mock_instance
             mock_choice = MagicMock()

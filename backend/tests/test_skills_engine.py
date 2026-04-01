@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from services.skills_engine import SkillMatch, compute_similarity, match_skills
+from pipeline.skills_engine import SkillMatch, compute_similarity, match_skills
 
 
 # ---------------------------------------------------------------------------

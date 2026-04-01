@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from services.eval_agent import EvalAgentResult, evaluate_output
+from evaluation.eval_agent import EvalAgentResult, evaluate_output
 
 
 class TestEvalAgentResult:
@@ -56,7 +56,7 @@ class TestEvaluateOutput:
             "reasoning": "Output matches expected perfectly.",
         })
 
-        with patch("services.eval_agent.OpenAIClient") as mock_cls:
+        with patch("evaluation.eval_agent.OpenAIClient") as mock_cls:
             mock_client = MagicMock()
             mock_client.generate_code.return_value = llm_response
             mock_cls.return_value = mock_client
@@ -84,7 +84,7 @@ class TestEvaluateOutput:
         df.to_excel(str(expected), index=False)
         df.to_excel(str(actual), index=False)
 
-        with patch("services.eval_agent.OpenAIClient") as mock_cls:
+        with patch("evaluation.eval_agent.OpenAIClient") as mock_cls:
             mock_client = MagicMock()
             mock_client.generate_code.return_value = "not valid json"
             mock_cls.return_value = mock_client
@@ -111,7 +111,7 @@ class TestEvaluateOutput:
             # missing data_integrity, completeness, overall
         })
 
-        with patch("services.eval_agent.OpenAIClient") as mock_cls:
+        with patch("evaluation.eval_agent.OpenAIClient") as mock_cls:
             mock_client = MagicMock()
             mock_client.generate_code.return_value = llm_response
             mock_cls.return_value = mock_client
@@ -143,7 +143,7 @@ class TestEvaluateOutput:
         df.to_excel(str(expected), index=False)
         df.to_excel(str(actual), index=False)
 
-        with patch("services.eval_agent.OpenAIClient") as mock_cls:
+        with patch("evaluation.eval_agent.OpenAIClient") as mock_cls:
             mock_client = MagicMock()
             mock_client.generate_code.side_effect = RuntimeError("API error")
             mock_cls.return_value = mock_client

@@ -9,7 +9,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from services.excel_comparator import (
+from evaluation.excel_comparator import (
     ComparisonResult,
     SheetComparison,
     compare_excel_files,

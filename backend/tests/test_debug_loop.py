@@ -1,4 +1,4 @@
-"""Unit tests for services.debug_loop.
+"""Unit tests for pipeline.debug_loop.
 
 TDD: tests written FIRST, implementation follows.
 All OpenAI calls and sandbox executions are mocked.
@@ -21,8 +21,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from services.openai_client import OpenAIClient
-from services.sandbox import ExecutionResult
+from infra.openai_client import OpenAIClient
+from infra.sandbox import ExecutionResult
 
 
 # ---------------------------------------------------------------------------
@@ -75,7 +75,7 @@ class TestDebugAttempt:
     """DebugAttempt must be a frozen (immutable) dataclass."""
 
     def test_frozen_dataclass(self) -> None:
-        from services.debug_loop import DebugAttempt
+        from pipeline.debug_loop import DebugAttempt
 
         attempt = DebugAttempt(
             retry_num=1,
@@ -87,7 +87,7 @@ class TestDebugAttempt:
             attempt.retry_num = 2  # type: ignore[misc]
 
     def test_fields(self) -> None:
-        from services.debug_loop import DebugAttempt
+        from pipeline.debug_loop import DebugAttempt
 
         attempt = DebugAttempt(
             retry_num=2,
@@ -110,7 +110,7 @@ class TestDebugResult:
     """DebugResult must be a frozen (immutable) dataclass."""
 
     def test_frozen_dataclass(self) -> None:
-        from services.debug_loop import DebugAttempt, DebugResult
+        from pipeline.debug_loop import DebugAttempt, DebugResult
 
         result = DebugResult(
             final_code="print('done')",
@@ -124,7 +124,7 @@ class TestDebugResult:
             result.success = False  # type: ignore[misc]
 
     def test_fields(self) -> None:
-        from services.debug_loop import DebugAttempt, DebugResult
+        from pipeline.debug_loop import DebugAttempt, DebugResult
 
         attempt = DebugAttempt(
             retry_num=1,
@@ -158,7 +158,7 @@ class TestRunDebugLoopImmediateSuccess:
 
     @pytest.mark.asyncio
     async def test_success_on_first_run_returns_success(self) -> None:
-        from services.debug_loop import run_debug_loop
+        from pipeline.debug_loop import run_debug_loop
 
         sandbox = _make_sandbox_sequence([_make_exec_result(success=True, stdout="ok\n")])
         client = _make_openai_client()
@@ -174,7 +174,7 @@ class TestRunDebugLoopImmediateSuccess:
 
     @pytest.mark.asyncio
     async def test_success_on_first_run_zero_retries(self) -> None:
-        from services.debug_loop import run_debug_loop
+        from pipeline.debug_loop import run_debug_loop
 
         sandbox = _make_sandbox_sequence([_make_exec_result(success=True, stdout="ok\n")])
         client = _make_openai_client()
@@ -191,7 +191,7 @@ class TestRunDebugLoopImmediateSuccess:
 
     @pytest.mark.asyncio
     async def test_success_on_first_run_final_code_unchanged(self) -> None:
-        from services.debug_loop import run_debug_loop
+        from pipeline.debug_loop import run_debug_loop
 
         original_code = "print('hello')"
         sandbox = _make_sandbox_sequence([_make_exec_result(success=True, stdout="hello\n")])
@@ -208,7 +208,7 @@ class TestRunDebugLoopImmediateSuccess:
 
     @pytest.mark.asyncio
     async def test_success_on_first_run_final_stdout_captured(self) -> None:
-        from services.debug_loop import run_debug_loop
+        from pipeline.debug_loop import run_debug_loop
 
         sandbox = _make_sandbox_sequence([_make_exec_result(success=True, stdout="captured output\n")])
         client = _make_openai_client()
@@ -224,7 +224,7 @@ class TestRunDebugLoopImmediateSuccess:
 
     @pytest.mark.asyncio
     async def test_openai_not_called_on_immediate_success(self) -> None:
-        from services.debug_loop import run_debug_loop
+        from pipeline.debug_loop import run_debug_loop
 
         sandbox = _make_sandbox_sequence([_make_exec_result(success=True)])
         client = _make_openai_client()
@@ -249,7 +249,7 @@ class TestRunDebugLoopSuccessAfterOneRetry:
 
     @pytest.mark.asyncio
     async def test_success_after_one_retry(self) -> None:
-        from services.debug_loop import run_debug_loop
+        from pipeline.debug_loop import run_debug_loop
 
         sandbox = _make_sandbox_sequence([
             _make_exec_result(success=False, stderr="NameError: x"),
@@ -269,7 +269,7 @@ class TestRunDebugLoopSuccessAfterOneRetry:
 
     @pytest.mark.asyncio
     async def test_one_retry_total_retries_is_one(self) -> None:
-        from services.debug_loop import run_debug_loop
+        from pipeline.debug_loop import run_debug_loop
 
         sandbox = _make_sandbox_sequence([
             _make_exec_result(success=False, stderr="NameError: x"),
@@ -289,7 +289,7 @@ class TestRunDebugLoopSuccessAfterOneRetry:
 
     @pytest.mark.asyncio
     async def test_attempts_list_has_one_entry(self) -> None:
-        from services.debug_loop import run_debug_loop
+        from pipeline.debug_loop import run_debug_loop
 
         sandbox = _make_sandbox_sequence([
             _make_exec_result(success=False, stderr="NameError: x"),
@@ -309,7 +309,7 @@ class TestRunDebugLoopSuccessAfterOneRetry:
 
     @pytest.mark.asyncio
     async def test_attempt_has_correct_retry_num(self) -> None:
-        from services.debug_loop import run_debug_loop
+        from pipeline.debug_loop import run_debug_loop
 
         sandbox = _make_sandbox_sequence([
             _make_exec_result(success=False, stderr="err"),
@@ -329,7 +329,7 @@ class TestRunDebugLoopSuccessAfterOneRetry:
 
     @pytest.mark.asyncio
     async def test_attempt_error_field_contains_stderr(self) -> None:
-        from services.debug_loop import run_debug_loop
+        from pipeline.debug_loop import run_debug_loop
 
         error_msg = "NameError: name 'x' is not defined"
         sandbox = _make_sandbox_sequence([
@@ -350,7 +350,7 @@ class TestRunDebugLoopSuccessAfterOneRetry:
 
     @pytest.mark.asyncio
     async def test_fixed_code_sent_to_sandbox_on_retry(self) -> None:
-        from services.debug_loop import run_debug_loop
+        from pipeline.debug_loop import run_debug_loop
 
         executed_codes: list[str] = []
 
@@ -375,7 +375,7 @@ class TestRunDebugLoopSuccessAfterOneRetry:
 
     @pytest.mark.asyncio
     async def test_final_code_is_fixed_code_after_retry(self) -> None:
-        from services.debug_loop import run_debug_loop
+        from pipeline.debug_loop import run_debug_loop
 
         fixed_code = "x = 99\nprint(x)"
         sandbox = _make_sandbox_sequence([
@@ -396,7 +396,7 @@ class TestRunDebugLoopSuccessAfterOneRetry:
 
     @pytest.mark.asyncio
     async def test_attempt_success_true_when_fixed_code_works(self) -> None:
-        from services.debug_loop import run_debug_loop
+        from pipeline.debug_loop import run_debug_loop
 
         sandbox = _make_sandbox_sequence([
             _make_exec_result(success=False, stderr="err"),
@@ -425,7 +425,7 @@ class TestRunDebugLoopSuccessAtMaxRetries:
 
     @pytest.mark.asyncio
     async def test_success_on_last_retry(self) -> None:
-        from services.debug_loop import run_debug_loop
+        from pipeline.debug_loop import run_debug_loop
 
         max_retries = 3
         # fail 3 times, succeed on 4th execution (3rd retry)
@@ -449,7 +449,7 @@ class TestRunDebugLoopSuccessAtMaxRetries:
 
     @pytest.mark.asyncio
     async def test_attempts_count_equals_max_retries(self) -> None:
-        from services.debug_loop import run_debug_loop
+        from pipeline.debug_loop import run_debug_loop
 
         max_retries = 3
         results = (
@@ -480,7 +480,7 @@ class TestRunDebugLoopFailureExhausted:
 
     @pytest.mark.asyncio
     async def test_failure_after_max_retries(self) -> None:
-        from services.debug_loop import run_debug_loop
+        from pipeline.debug_loop import run_debug_loop
 
         max_retries = 3
         # All executions fail
@@ -500,7 +500,7 @@ class TestRunDebugLoopFailureExhausted:
 
     @pytest.mark.asyncio
     async def test_total_retries_equals_max_retries_when_all_fail(self) -> None:
-        from services.debug_loop import run_debug_loop
+        from pipeline.debug_loop import run_debug_loop
 
         max_retries = 3
         results = [_make_exec_result(success=False, stderr="err")] * (max_retries + 1)
@@ -519,7 +519,7 @@ class TestRunDebugLoopFailureExhausted:
 
     @pytest.mark.asyncio
     async def test_attempts_list_length_equals_max_retries_when_all_fail(self) -> None:
-        from services.debug_loop import run_debug_loop
+        from pipeline.debug_loop import run_debug_loop
 
         max_retries = 2
         results = [_make_exec_result(success=False, stderr="err")] * (max_retries + 1)
@@ -538,7 +538,7 @@ class TestRunDebugLoopFailureExhausted:
 
     @pytest.mark.asyncio
     async def test_attempt_success_false_when_fixed_code_still_fails(self) -> None:
-        from services.debug_loop import run_debug_loop
+        from pipeline.debug_loop import run_debug_loop
 
         sandbox = _make_sandbox_sequence([
             _make_exec_result(success=False, stderr="err1"),
@@ -558,7 +558,7 @@ class TestRunDebugLoopFailureExhausted:
 
     @pytest.mark.asyncio
     async def test_openai_called_max_retries_times_when_all_fail(self) -> None:
-        from services.debug_loop import run_debug_loop
+        from pipeline.debug_loop import run_debug_loop
 
         max_retries = 3
         results = [_make_exec_result(success=False, stderr="err")] * (max_retries + 1)
@@ -577,7 +577,7 @@ class TestRunDebugLoopFailureExhausted:
 
     @pytest.mark.asyncio
     async def test_retry_num_increments_correctly(self) -> None:
-        from services.debug_loop import run_debug_loop
+        from pipeline.debug_loop import run_debug_loop
 
         max_retries = 3
         results = [_make_exec_result(success=False, stderr="err")] * (max_retries + 1)
@@ -606,7 +606,7 @@ class TestRunDebugLoopPromptConstruction:
 
     @pytest.mark.asyncio
     async def test_task_in_openai_prompt(self) -> None:
-        from services.debug_loop import run_debug_loop
+        from pipeline.debug_loop import run_debug_loop
 
         sandbox = _make_sandbox_sequence([
             _make_exec_result(success=False, stderr="err"),
@@ -627,7 +627,7 @@ class TestRunDebugLoopPromptConstruction:
 
     @pytest.mark.asyncio
     async def test_code_in_openai_prompt(self) -> None:
-        from services.debug_loop import run_debug_loop
+        from pipeline.debug_loop import run_debug_loop
 
         sandbox = _make_sandbox_sequence([
             _make_exec_result(success=False, stderr="err"),
@@ -648,7 +648,7 @@ class TestRunDebugLoopPromptConstruction:
 
     @pytest.mark.asyncio
     async def test_stderr_in_openai_prompt(self) -> None:
-        from services.debug_loop import run_debug_loop
+        from pipeline.debug_loop import run_debug_loop
 
         unique_error = "UNIQUE_STDERR_MESSAGE_789"
         sandbox = _make_sandbox_sequence([
@@ -670,7 +670,7 @@ class TestRunDebugLoopPromptConstruction:
 
     @pytest.mark.asyncio
     async def test_file_context_in_openai_prompt(self) -> None:
-        from services.debug_loop import run_debug_loop
+        from pipeline.debug_loop import run_debug_loop
 
         sandbox = _make_sandbox_sequence([
             _make_exec_result(success=False, stderr="err"),
@@ -702,7 +702,7 @@ class TestRunDebugLoopEdgeCases:
     @pytest.mark.asyncio
     async def test_empty_stderr_uses_stdout_as_error(self) -> None:
         """When stderr is empty but code failed, stdout is used as error context."""
-        from services.debug_loop import run_debug_loop
+        from pipeline.debug_loop import run_debug_loop
 
         sandbox = _make_sandbox_sequence([
             _make_exec_result(success=False, stderr="", stdout="some stdout output"),
@@ -723,7 +723,7 @@ class TestRunDebugLoopEdgeCases:
 
     @pytest.mark.asyncio
     async def test_none_file_context_does_not_crash(self) -> None:
-        from services.debug_loop import run_debug_loop
+        from pipeline.debug_loop import run_debug_loop
 
         sandbox = _make_sandbox_sequence([_make_exec_result(success=True)])
         client = _make_openai_client()
@@ -741,7 +741,7 @@ class TestRunDebugLoopEdgeCases:
     @pytest.mark.asyncio
     async def test_max_retries_zero_returns_failure_immediately(self) -> None:
         """max_retries=0 means no retries — failure on first run stays failure."""
-        from services.debug_loop import run_debug_loop
+        from pipeline.debug_loop import run_debug_loop
 
         sandbox = _make_sandbox_sequence([_make_exec_result(success=False, stderr="err")])
         client = _make_openai_client()
@@ -760,7 +760,7 @@ class TestRunDebugLoopEdgeCases:
 
     @pytest.mark.asyncio
     async def test_max_retries_zero_openai_not_called(self) -> None:
-        from services.debug_loop import run_debug_loop
+        from pipeline.debug_loop import run_debug_loop
 
         sandbox = _make_sandbox_sequence([_make_exec_result(success=False, stderr="err")])
         client = _make_openai_client()
@@ -777,7 +777,7 @@ class TestRunDebugLoopEdgeCases:
 
     @pytest.mark.asyncio
     async def test_returns_debug_result_instance(self) -> None:
-        from services.debug_loop import DebugResult, run_debug_loop
+        from pipeline.debug_loop import DebugResult, run_debug_loop
 
         sandbox = _make_sandbox_sequence([_make_exec_result(success=True)])
         client = _make_openai_client()

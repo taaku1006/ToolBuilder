@@ -15,10 +15,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Callable
 
 from eval.models import ArchitectureConfig, EvalMetrics, EvalResult, TestCase
-from services.agent_orchestrator import CancelledError, orchestrate
-from services.eval_agent import evaluate_output
-from services.excel_comparator import compare_excel_files, find_best_output_match
-from services.sandbox import execute_code
+from pipeline.agent_orchestrator import CancelledError, orchestrate
+from evaluation.eval_agent import evaluate_output
+from evaluation.excel_comparator import compare_excel_files, find_best_output_match
+from infra.sandbox import execute_code
 
 if TYPE_CHECKING:
     from eval.versioning import RunSnapshot
@@ -138,6 +138,7 @@ class EvalRunner:
                 settings=settings,
                 expected_file_path=case.expected_file_path,
                 cancel_check=self._cancel_check,
+                rubric=case.rubric,
             ):
                 # Keep full content for internal processing; truncate for log storage
                 full_content = entry.content

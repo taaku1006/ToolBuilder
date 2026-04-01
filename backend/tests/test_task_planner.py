@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from services.task_planner import (
+from pipeline.task_planner import (
     PlanResult,
     SubTask,
     run_planner,

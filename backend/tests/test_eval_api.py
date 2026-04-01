@@ -350,7 +350,7 @@ class TestRunnerFileIdIntegration:
 
         called_with: dict = {}
 
-        async def mock_orchestrate(task, file_id, settings, expected_file_path=None, cancel_check=None):
+        async def mock_orchestrate(task, file_id, settings, expected_file_path=None, cancel_check=None, rubric=None):
             called_with["file_id"] = file_id
             entry = MagicMock()
             entry.phase = "C"
@@ -410,7 +410,7 @@ class TestRunnerFileIdIntegration:
 
         called_with: dict = {}
 
-        async def mock_orchestrate(task, file_id, settings, expected_file_path=None, cancel_check=None):
+        async def mock_orchestrate(task, file_id, settings, expected_file_path=None, cancel_check=None, rubric=None):
             called_with["file_id"] = file_id
             entry = MagicMock()
             entry.phase = "C"
@@ -466,7 +466,7 @@ class TestRunnerFileIdIntegration:
         upload_dir = tmp_path / "uploads"
         upload_dir.mkdir()
 
-        async def mock_orchestrate(task, file_id, settings, expected_file_path=None, cancel_check=None):
+        async def mock_orchestrate(task, file_id, settings, expected_file_path=None, cancel_check=None, rubric=None):
             entry = MagicMock()
             entry.phase = "C"
             entry.action = "complete"

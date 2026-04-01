@@ -1,4 +1,4 @@
-"""Unit tests for services.agent_orchestrator.
+"""Unit tests for pipeline.agent_orchestrator.
 
 TDD: tests written FIRST, implementation follows.
 All OpenAI calls and sandbox executions are mocked.
@@ -70,7 +70,7 @@ class TestAgentLogEntry:
     """AgentLogEntry must be immutable and carry the right fields."""
 
     def test_frozen_dataclass(self) -> None:
-        from services.agent_orchestrator import AgentLogEntry
+        from pipeline.agent_orchestrator import AgentLogEntry
 
         entry = AgentLogEntry(
             phase="A",
@@ -82,7 +82,7 @@ class TestAgentLogEntry:
             entry.phase = "B"  # type: ignore[misc]
 
     def test_fields(self) -> None:
-        from services.agent_orchestrator import AgentLogEntry
+        from pipeline.agent_orchestrator import AgentLogEntry
 
         entry = AgentLogEntry(
             phase="C",
@@ -107,11 +107,11 @@ class TestOrchestrateNoFile:
     @pytest.mark.asyncio
     async def test_yields_agent_log_entries(self) -> None:
         """orchestrate yields at least one AgentLogEntry."""
-        from services.agent_orchestrator import AgentLogEntry, orchestrate
+        from pipeline.agent_orchestrator import AgentLogEntry, orchestrate
 
         settings = _make_settings()
 
-        with patch("services.agent_orchestrator.OpenAIClient") as mock_cls:
+        with patch("pipeline.agent_orchestrator.OpenAIClient") as mock_cls:
             mock_instance = MagicMock()
             mock_instance.generate_code.return_value = _phase_c_json()
             mock_cls.return_value = mock_instance
@@ -131,12 +131,12 @@ class TestOrchestrateNoFile:
     @pytest.mark.asyncio
     async def test_final_entry_has_python_code(self) -> None:
         """The last entry must include python_code in its content as JSON."""
-        from services.agent_orchestrator import orchestrate
+        from pipeline.agent_orchestrator import orchestrate
 
         settings = _make_settings()
         expected_code = "import pandas as pd\nprint('test')"
 
-        with patch("services.agent_orchestrator.OpenAIClient") as mock_cls:
+        with patch("pipeline.agent_orchestrator.OpenAIClient") as mock_cls:
             mock_instance = MagicMock()
             mock_instance.generate_code.return_value = _phase_c_json(
                 python_code=expected_code
@@ -162,11 +162,11 @@ class TestOrchestrateNoFile:
         """All AgentLogEntry timestamps must be valid ISO-format strings."""
         import datetime
 
-        from services.agent_orchestrator import orchestrate
+        from pipeline.agent_orchestrator import orchestrate
 
         settings = _make_settings()
 
-        with patch("services.agent_orchestrator.OpenAIClient") as mock_cls:
+        with patch("pipeline.agent_orchestrator.OpenAIClient") as mock_cls:
             mock_instance = MagicMock()
             mock_instance.generate_code.return_value = _phase_c_json()
             mock_cls.return_value = mock_instance
@@ -187,11 +187,11 @@ class TestOrchestrateNoFile:
     @pytest.mark.asyncio
     async def test_phase_c_entry_present(self) -> None:
         """At least one entry with phase='C' must be yielded."""
-        from services.agent_orchestrator import orchestrate
+        from pipeline.agent_orchestrator import orchestrate
 
         settings = _make_settings()
 
-        with patch("services.agent_orchestrator.OpenAIClient") as mock_cls:
+        with patch("pipeline.agent_orchestrator.OpenAIClient") as mock_cls:
             mock_instance = MagicMock()
             mock_instance.generate_code.return_value = _phase_c_json()
             mock_cls.return_value = mock_instance
@@ -211,11 +211,11 @@ class TestOrchestrateNoFile:
     @pytest.mark.asyncio
     async def test_no_phase_a_without_file_id(self) -> None:
         """Without file_id, no Phase A entries should be yielded."""
-        from services.agent_orchestrator import orchestrate
+        from pipeline.agent_orchestrator import orchestrate
 
         settings = _make_settings()
 
-        with patch("services.agent_orchestrator.OpenAIClient") as mock_cls:
+        with patch("pipeline.agent_orchestrator.OpenAIClient") as mock_cls:
             mock_instance = MagicMock()
             mock_instance.generate_code.return_value = _phase_c_json()
             mock_cls.return_value = mock_instance
@@ -244,7 +244,7 @@ class TestOrchestrateWithFile:
     @pytest.mark.asyncio
     async def test_phase_a_entry_present(self) -> None:
         """With file_id, Phase A entry must be yielded."""
-        from services.agent_orchestrator import orchestrate
+        from pipeline.agent_orchestrator import orchestrate
 
         settings = _make_settings(reflection_enabled=True)
 
@@ -252,9 +252,9 @@ class TestOrchestrateWithFile:
         exploration_output = "col_a: int\n"
 
         with (
-            patch("services.agent_orchestrator.OpenAIClient") as mock_cls,
-            patch("services.agent_orchestrator.execute_code") as mock_exec,
-            patch("services.agent_orchestrator._resolve_file_context") as mock_ctx,
+            patch("pipeline.agent_orchestrator.OpenAIClient") as mock_cls,
+            patch("pipeline.agent_orchestrator.execute_code") as mock_exec,
+            patch("pipeline.agent_orchestrator._resolve_file_context") as mock_ctx,
         ):
             mock_ctx.return_value = "col_a: int"
             mock_instance = MagicMock()
@@ -266,7 +266,7 @@ class TestOrchestrateWithFile:
             ]
             mock_cls.return_value = mock_instance
 
-            from services.sandbox import ExecutionResult
+            from infra.sandbox import ExecutionResult
 
             mock_exec.return_value = ExecutionResult(
                 stdout=exploration_output,
@@ -291,14 +291,14 @@ class TestOrchestrateWithFile:
     @pytest.mark.asyncio
     async def test_phase_b_entry_present(self) -> None:
         """With file_id, Phase B entry must be yielded."""
-        from services.agent_orchestrator import orchestrate
+        from pipeline.agent_orchestrator import orchestrate
 
         settings = _make_settings(reflection_enabled=True)
 
         with (
-            patch("services.agent_orchestrator.OpenAIClient") as mock_cls,
-            patch("services.agent_orchestrator.execute_code") as mock_exec,
-            patch("services.agent_orchestrator._resolve_file_context") as mock_ctx,
+            patch("pipeline.agent_orchestrator.OpenAIClient") as mock_cls,
+            patch("pipeline.agent_orchestrator.execute_code") as mock_exec,
+            patch("pipeline.agent_orchestrator._resolve_file_context") as mock_ctx,
         ):
             mock_ctx.return_value = "col_a: int"
             mock_instance = MagicMock()
@@ -309,7 +309,7 @@ class TestOrchestrateWithFile:
             ]
             mock_cls.return_value = mock_instance
 
-            from services.sandbox import ExecutionResult
+            from infra.sandbox import ExecutionResult
 
             mock_exec.return_value = ExecutionResult(
                 stdout="explored",
@@ -334,11 +334,11 @@ class TestOrchestrateWithFile:
     @pytest.mark.asyncio
     async def test_reflection_disabled_skips_a_and_b(self) -> None:
         """With REFLECTION_ENABLED=false, Phase A and B are skipped."""
-        from services.agent_orchestrator import orchestrate
+        from pipeline.agent_orchestrator import orchestrate
 
         settings = _make_settings(reflection_enabled=False, reflection_phase_enabled=False)
 
-        with patch("services.agent_orchestrator.OpenAIClient") as mock_cls:
+        with patch("pipeline.agent_orchestrator.OpenAIClient") as mock_cls:
             mock_instance = MagicMock()
             mock_instance.generate_code.return_value = _phase_c_json()
             mock_cls.return_value = mock_instance
@@ -359,14 +359,14 @@ class TestOrchestrateWithFile:
     @pytest.mark.asyncio
     async def test_all_phases_have_action_field(self) -> None:
         """Every AgentLogEntry must have a non-empty action field."""
-        from services.agent_orchestrator import orchestrate
+        from pipeline.agent_orchestrator import orchestrate
 
         settings = _make_settings(reflection_enabled=True)
 
         with (
-            patch("services.agent_orchestrator.OpenAIClient") as mock_cls,
-            patch("services.agent_orchestrator.execute_code") as mock_exec,
-            patch("services.agent_orchestrator._resolve_file_context") as mock_ctx,
+            patch("pipeline.agent_orchestrator.OpenAIClient") as mock_cls,
+            patch("pipeline.agent_orchestrator.execute_code") as mock_exec,
+            patch("pipeline.agent_orchestrator._resolve_file_context") as mock_ctx,
         ):
             mock_ctx.return_value = "col_a: int"
             mock_instance = MagicMock()
@@ -377,7 +377,7 @@ class TestOrchestrateWithFile:
             ]
             mock_cls.return_value = mock_instance
 
-            from services.sandbox import ExecutionResult
+            from infra.sandbox import ExecutionResult
 
             mock_exec.return_value = ExecutionResult(
                 stdout="explored",
@@ -411,18 +411,18 @@ class TestOrchestrateGeneratorProtocol:
     def test_is_async_generator_function(self) -> None:
         import inspect
 
-        from services.agent_orchestrator import orchestrate
+        from pipeline.agent_orchestrator import orchestrate
 
         assert inspect.isasyncgenfunction(orchestrate)
 
     @pytest.mark.asyncio
     async def test_can_be_iterated_multiple_times_with_new_call(self) -> None:
         """Each call to orchestrate() produces an independent generator."""
-        from services.agent_orchestrator import orchestrate
+        from pipeline.agent_orchestrator import orchestrate
 
         settings = _make_settings()
 
-        with patch("services.agent_orchestrator.OpenAIClient") as mock_cls:
+        with patch("pipeline.agent_orchestrator.OpenAIClient") as mock_cls:
             mock_instance = MagicMock()
             mock_instance.generate_code.return_value = _phase_c_json()
             mock_cls.return_value = mock_instance
@@ -459,14 +459,14 @@ class TestOrchestratePhaseD:
     @pytest.mark.asyncio
     async def test_phase_d_start_entry_present(self) -> None:
         """With debug_loop_enabled, Phase D start entry must be yielded."""
-        from services.agent_orchestrator import orchestrate
-        from services.sandbox import ExecutionResult
+        from pipeline.agent_orchestrator import orchestrate
+        from infra.sandbox import ExecutionResult
 
         settings = _make_settings(debug_loop_enabled=True)
 
         with (
-            patch("services.agent_orchestrator.OpenAIClient") as mock_cls,
-            patch("services.agent_orchestrator.execute_code") as mock_exec,
+            patch("pipeline.agent_orchestrator.OpenAIClient") as mock_cls,
+            patch("pipeline.agent_orchestrator.execute_code") as mock_exec,
         ):
             mock_instance = MagicMock()
             mock_instance.generate_code.return_value = _phase_c_json()
@@ -495,14 +495,14 @@ class TestOrchestratePhaseD:
     @pytest.mark.asyncio
     async def test_phase_d_complete_on_first_exec_success(self) -> None:
         """When code executes successfully on first try, D/complete is yielded."""
-        from services.agent_orchestrator import orchestrate
-        from services.sandbox import ExecutionResult
+        from pipeline.agent_orchestrator import orchestrate
+        from infra.sandbox import ExecutionResult
 
         settings = _make_settings(debug_loop_enabled=True)
 
         with (
-            patch("services.agent_orchestrator.OpenAIClient") as mock_cls,
-            patch("services.agent_orchestrator.execute_code") as mock_exec,
+            patch("pipeline.agent_orchestrator.OpenAIClient") as mock_cls,
+            patch("pipeline.agent_orchestrator.execute_code") as mock_exec,
         ):
             mock_instance = MagicMock()
             mock_instance.generate_code.return_value = _phase_c_json()
@@ -532,11 +532,11 @@ class TestOrchestratePhaseD:
     @pytest.mark.asyncio
     async def test_phase_d_disabled_when_setting_off(self) -> None:
         """With debug_loop_enabled=False, no Phase D entries yielded."""
-        from services.agent_orchestrator import orchestrate
+        from pipeline.agent_orchestrator import orchestrate
 
         settings = _make_settings(debug_loop_enabled=False)
 
-        with patch("services.agent_orchestrator.OpenAIClient") as mock_cls:
+        with patch("pipeline.agent_orchestrator.OpenAIClient") as mock_cls:
             mock_instance = MagicMock()
             mock_instance.generate_code.return_value = _phase_c_json()
             mock_cls.return_value = mock_instance
@@ -556,9 +556,9 @@ class TestOrchestratePhaseD:
     @pytest.mark.asyncio
     async def test_phase_d_retry_entries_on_failure(self) -> None:
         """When first exec fails and debug_loop fixes it, D/retry and D/complete are yielded."""
-        from services.agent_orchestrator import orchestrate
-        from services.debug_loop import DebugAttempt, DebugResult
-        from services.sandbox import ExecutionResult
+        from pipeline.agent_orchestrator import orchestrate
+        from pipeline.debug_loop import DebugAttempt, DebugResult
+        from infra.sandbox import ExecutionResult
 
         settings = _make_settings(debug_loop_enabled=True)
 
@@ -588,10 +588,10 @@ class TestOrchestratePhaseD:
         )
 
         with (
-            patch("services.agent_orchestrator.OpenAIClient") as mock_cls,
-            patch("services.phase_handlers.execute_code") as mock_exec,
+            patch("pipeline.agent_orchestrator.OpenAIClient") as mock_cls,
+            patch("pipeline.phase_handlers.execute_code") as mock_exec,
             patch(
-                "services.phase_handlers.run_debug_loop",
+                "pipeline.phase_handlers.run_debug_loop",
                 new=AsyncMock(return_value=debug_result_with_retry),
             ),
         ):
@@ -619,14 +619,14 @@ class TestOrchestratePhaseD:
     @pytest.mark.asyncio
     async def test_final_payload_has_debug_retries_field(self) -> None:
         """The final C/complete payload must include debug_retries field."""
-        from services.agent_orchestrator import orchestrate
-        from services.sandbox import ExecutionResult
+        from pipeline.agent_orchestrator import orchestrate
+        from infra.sandbox import ExecutionResult
 
         settings = _make_settings(debug_loop_enabled=True)
 
         with (
-            patch("services.agent_orchestrator.OpenAIClient") as mock_cls,
-            patch("services.agent_orchestrator.execute_code") as mock_exec,
+            patch("pipeline.agent_orchestrator.OpenAIClient") as mock_cls,
+            patch("pipeline.agent_orchestrator.execute_code") as mock_exec,
         ):
             mock_instance = MagicMock()
             mock_instance.generate_code.return_value = _phase_c_json()
@@ -658,14 +658,14 @@ class TestOrchestratePhaseD:
     @pytest.mark.asyncio
     async def test_final_payload_debug_retries_zero_on_first_success(self) -> None:
         """debug_retries is 0 when code succeeds on first execution."""
-        from services.agent_orchestrator import orchestrate
-        from services.sandbox import ExecutionResult
+        from pipeline.agent_orchestrator import orchestrate
+        from infra.sandbox import ExecutionResult
 
         settings = _make_settings(debug_loop_enabled=True)
 
         with (
-            patch("services.agent_orchestrator.OpenAIClient") as mock_cls,
-            patch("services.agent_orchestrator.execute_code") as mock_exec,
+            patch("pipeline.agent_orchestrator.OpenAIClient") as mock_cls,
+            patch("pipeline.agent_orchestrator.execute_code") as mock_exec,
         ):
             mock_instance = MagicMock()
             mock_instance.generate_code.return_value = _phase_c_json()

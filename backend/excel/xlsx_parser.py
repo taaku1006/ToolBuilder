@@ -7,15 +7,22 @@ from __future__ import annotations
 
 import csv
 import datetime
-from dataclasses import dataclass
+from collections import defaultdict
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import openpyxl
 import pandas as pd
+from openpyxl.utils import get_column_letter
 
 _SUPPORTED_EXTENSIONS = {".xlsx", ".xls", ".csv"}
 _PREVIEW_ROWS = 30
 _TYPE_INFERENCE_ROWS = 100
+
+# Sheets with this many merged ranges are treated as output templates
+_TEMPLATE_MERGE_THRESHOLD = 8
+# Keywords that identify template sheets by name
+_TEMPLATE_NAME_KEYWORDS = ("テンプレート", "template", "Template", "フォーム", "form")
 
 
 @dataclass(frozen=True)
@@ -27,6 +34,10 @@ class SheetInfo:
     headers: list[str]
     types: dict[str, str]
     preview: list[dict[str, str | int | float | None]]
+    # Merged cell ranges (e.g. "A1:J1", "A7:D7")
+    merged_cells: tuple[str, ...] = ()
+    # For template-like sheets: row-by-row structural map
+    template_map: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -72,19 +83,30 @@ def build_file_context(
         lines: list[str] = [f"[Sheet: {sheet.name}]"]
         lines.append(f"Rows: {sheet.total_rows}")
 
-        col_descriptions = ", ".join(
-            f"{h} ({sheet.types.get(h, 'unknown')})" for h in sheet.headers
-        )
-        lines.append(f"Columns: {col_descriptions}")
+        if sheet.merged_cells:
+            lines.append(f"Merged cells: {', '.join(sheet.merged_cells)}")
 
-        sample_count = min(max_sample_rows, len(sheet.preview))
-        if sample_count > 0:
-            lines.append(f"Sample rows ({sample_count}):")
-            for row in sheet.preview[:sample_count]:
-                row_str = ", ".join(
-                    f"{k}={v!r}" for k, v in row.items()
-                )
-                lines.append(f"  {row_str}")
+        if sheet.template_map:
+            lines.append(
+                "⚠️ テンプレートシート検出: 結合セルあり。"
+                "書き込み時は各結合範囲の左上セルのみに値を設定すること。"
+            )
+            lines.append("Template structure (行番号:セル範囲=値 | (空:データ書込み位置)):")
+            lines.append(sheet.template_map)
+        else:
+            col_descriptions = ", ".join(
+                f"{h} ({sheet.types.get(h, 'unknown')})" for h in sheet.headers
+            )
+            lines.append(f"Columns: {col_descriptions}")
+
+            sample_count = min(max_sample_rows, len(sheet.preview))
+            if sample_count > 0:
+                lines.append(f"Sample rows ({sample_count}):")
+                for row in sheet.preview[:sample_count]:
+                    row_str = ", ".join(
+                        f"{k}={v!r}" for k, v in row.items()
+                    )
+                    lines.append(f"  {row_str}")
 
         parts.append("\n".join(lines))
 
@@ -105,6 +127,13 @@ def _parse_xlsx(path: Path) -> list[SheetInfo]:
         ws = wb[sheet_name]
         rows = list(ws.iter_rows(values_only=True))
 
+        merged: tuple[str, ...] = tuple(str(r) for r in ws.merged_cells.ranges)
+        is_template = (
+            any(kw in sheet_name for kw in _TEMPLATE_NAME_KEYWORDS)
+            or len(merged) >= _TEMPLATE_MERGE_THRESHOLD
+        )
+        template_map = _build_template_map(ws) if is_template else ""
+
         if not rows:
             results.append(
                 SheetInfo(
@@ -113,6 +142,8 @@ def _parse_xlsx(path: Path) -> list[SheetInfo]:
                     headers=[],
                     types={},
                     preview=[],
+                    merged_cells=merged,
+                    template_map=template_map,
                 )
             )
             continue
@@ -132,10 +163,74 @@ def _parse_xlsx(path: Path) -> list[SheetInfo]:
                 headers=headers,
                 types=types,
                 preview=preview_rows,
+                merged_cells=merged,
+                template_map=template_map,
             )
         )
 
     return results
+
+
+def _build_template_map(ws) -> str:
+    """Build a row-by-row structural map of a template/form sheet.
+
+    Shows which cells contain labels and which are empty data-entry positions,
+    taking merged cell ranges into account.
+    """
+    # Index merged ranges by their starting row
+    merged_starting: dict[int, list] = defaultdict(list)
+    # Track all (row, col) positions covered by any merge
+    merge_coverage: set[tuple[int, int]] = set()
+
+    for mr in ws.merged_cells.ranges:
+        merged_starting[mr.min_row].append(mr)
+        for r in range(mr.min_row, mr.max_row + 1):
+            for c in range(mr.min_col, mr.max_col + 1):
+                merge_coverage.add((r, c))
+
+    # Collect row numbers that have visible content or start a merged range
+    relevant_rows: set[int] = set(merged_starting.keys())
+    for row in ws.iter_rows():
+        for cell in row:
+            if cell.value is not None:
+                relevant_rows.add(cell.row)
+
+    lines: list[str] = []
+    for row_num in sorted(relevant_rows):
+        parts: list[str] = []
+        col = 1
+        max_col = ws.max_column or 1
+
+        while col <= max_col:
+            # Check if a merged range starts at this cell
+            starts_here = [
+                mr for mr in merged_starting.get(row_num, [])
+                if mr.min_col == col
+            ]
+            if starts_here:
+                mr = starts_here[0]
+                col_start = get_column_letter(mr.min_col)
+                col_end = get_column_letter(mr.max_col)
+                range_str = f"{col_start}{mr.min_row}:{col_end}{mr.max_row}"
+                val = ws.cell(mr.min_row, mr.min_col).value
+                if val is not None:
+                    parts.append(f"{range_str}={repr(val)}")
+                else:
+                    parts.append(f"{range_str}=(空:データ書込み位置)")
+                col = mr.max_col + 1
+            elif (row_num, col) in merge_coverage:
+                # Covered by a merge that started elsewhere — skip
+                col += 1
+            else:
+                cell = ws.cell(row_num, col)
+                if cell.value is not None:
+                    parts.append(f"{get_column_letter(col)}{row_num}={repr(cell.value)}")
+                col += 1
+
+        if parts:
+            lines.append(f"  行{row_num}: " + " | ".join(parts))
+
+    return "\n".join(lines)
 
 
 def _parse_csv(path: Path) -> list[SheetInfo]:

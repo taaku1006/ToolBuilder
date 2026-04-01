@@ -25,7 +25,7 @@ def test_settings() -> Settings:
 
 @pytest.fixture
 def manager(test_settings: Settings):
-    from services.eval_run_manager import EvalRunManager
+    from eval.run_manager import EvalRunManager
     return EvalRunManager(settings=test_settings)
 
 

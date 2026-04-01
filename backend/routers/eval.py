@@ -1,7 +1,7 @@
 """Eval harness API endpoints.
 
 This router is a thin HTTP handler. All business logic lives in
-`services.eval_run_manager.EvalRunManager`.
+`eval.run_manager.EvalRunManager`.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from eval.models import load_architecture, load_test_case
 from eval.report import EvalReport, compare_runs
 from eval.runner import EvalRunner
 from eval.versioning import capture_run_snapshot, diff_snapshots
-from services.eval_run_manager import EvalRunManager
+from eval.run_manager import EvalRunManager
 
 logger = logging.getLogger(__name__)
 

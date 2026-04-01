@@ -65,7 +65,7 @@ def mock_openai_json_str(mock_openai_response: dict) -> str:
 def mock_openai_client(mock_openai_json_str: str) -> Generator[MagicMock, None, None]:
     """Patch OpenAIClient.generate_code to return a mock JSON string."""
     with patch(
-        "services.openai_client.OpenAI",
+        "infra.openai_client.OpenAI",
         autospec=True,
     ) as mock_openai_cls:
         mock_instance = MagicMock()

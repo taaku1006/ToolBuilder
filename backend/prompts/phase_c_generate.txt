@@ -25,6 +25,40 @@
 - 探索結果のシート名・カラム名・データ型を正確にコードに反映すること（例: シート名が「シート1」なら sheet_name='シート1' を使う。推測で 'Sheet1' にしない）
 - カラム名は探索結果に表示された名前をそのまま使うこと（全角・半角・括弧もそのまま）
 
+【結合セル・テンプレートシートへの書き込みルール（重要）】
+ファイル構造に「⚠️ テンプレートシート検出」または「Merged cells」が含まれる場合、以下を必ず守ること:
+
+1. テンプレートのコピーは必ず `wb.copy_worksheet(template_ws)` を使う（スタイル・結合セル保持）
+   ```python
+   template_ws = wb['月次品質報告書テンプレート']
+   report_ws = wb.copy_worksheet(template_ws)
+   report_ws.title = '月次品質報告書'
+   ```
+
+2. 結合セルへの書き込みは必ず「左上のセル」のみに行う
+   - 正しい例: `ws.cell(row=7, column=5).value = 値`  # E7:F7 の範囲なら E7 に書く
+   - 誤った例: `ws['F7'].value = 値`  # 結合範囲内の別セルには書かない
+
+3. ファイル構造の「Template structure」を参照し、「(空:データ書込み位置)」とある座標の
+   左上セルのみに値をセットすること
+   - 例: `行7: A7:D7='総検査数' | E7:F7=(空:データ書込み位置) | G7:H7='前月比' | I7:J7=(空:データ書込み位置)`
+     → `ws.cell(7, 5).value = 総検査数の値`（E列=5列目）
+     → `ws.cell(7, 9).value = 前月比テキスト`（I列=9列目）
+
+4. 既存の結合セルを壊さないため、`ws.merge_cells()` を新たに呼ばないこと
+
+5. 部門別シートを作る際は先に全データを書き込んだシートをコピーし、
+   不要セクションの行を `ws.delete_rows(start, count)` で下から上の順に削除すること
+
+6. 数値は必ず `round()` で丸めてからセルに書くこと
+
+7. フォントカラーや背景色の設定例:
+   ```python
+   from openpyxl.styles import Font, PatternFill
+   cell.font = Font(color="FF0000")       # 赤文字
+   cell.fill = PatternFill("solid", fgColor="FFFF99")  # 黄背景
+   ```
+
 JSON形式で返答:
 {
   "summary": "処理内容の要約",

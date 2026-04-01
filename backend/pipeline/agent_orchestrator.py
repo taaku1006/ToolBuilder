@@ -14,19 +14,19 @@ from pathlib import Path
 from core.config import Settings
 
 logger = logging.getLogger(__name__)
-from services.openai_client import OpenAIClient
-from services.sandbox import execute_code
-from services.reflection_engine import run_phase_c
-from services.eval_debug_loop import run_eval_debug_loop
-from services.llm_eval_debug_loop import run_llm_eval_debug_loop
-from services.xlsx_parser import SheetInfo, build_file_context, parse_file
-from services.langfuse_tracing import OrchestrationTrace
+from infra.openai_client import OpenAIClient
+from infra.sandbox import execute_code
+from pipeline.reflection_engine import run_phase_c
+from pipeline.eval_debug_loop import run_eval_debug_loop
+from pipeline.llm_eval_debug_loop import run_llm_eval_debug_loop
+from excel.xlsx_parser import SheetInfo, build_file_context, parse_file
+from infra.langfuse_tracing import OrchestrationTrace
 
 # Re-export shared types for backward compatibility
-from services.orchestrator_types import AgentLogEntry, CancelledError, _now_iso  # noqa: F401
+from pipeline.orchestrator_types import AgentLogEntry, CancelledError, _now_iso  # noqa: F401
 
 # Phase handler functions
-from services.phase_handlers import (
+from pipeline.phase_handlers import (
     PhaseAState, PhaseBState, PhaseDState, PhasePState,
     handle_phase_a, handle_phase_b, handle_phase_d,
     handle_phase_e, handle_phase_p,
@@ -73,6 +73,7 @@ async def orchestrate(
     settings: Settings,
     expected_file_path: str | None = None,
     cancel_check: callable | None = None,
+    rubric: dict | None = None,
 ):
     """Run Phase A→B→P→C→D→F→G→E sequentially, yielding AgentLogEntry objects.
 
@@ -158,7 +159,7 @@ async def orchestrate(
         timestamp=_now_iso(),
     )
 
-    from services.reflection_engine import PhaseCResult
+    from pipeline.reflection_engine import PhaseCResult
     if decomposition_succeeded and plan is not None:
         phase_c = PhaseCResult(
             summary="タスク分解により段階的に生成されたコード",
@@ -212,6 +213,7 @@ async def orchestrate(
             upload_dir=settings.upload_dir, output_dir=settings.output_dir,
             timeout=settings.exec_timeout, max_retries=settings.eval_debug_retry_limit,
             quality_threshold=settings.eval_debug_quality_threshold, settings=settings,
+            rubric=rubric,
         )
         for attempt in eval_debug_result.attempts:
             yield AgentLogEntry(phase="F", action="retry", content=f"リトライ {attempt.retry_num}: score={attempt.mechanical_score:.2%} {attempt.comparison_summary[:100]}", timestamp=_now_iso())
@@ -245,6 +247,7 @@ async def orchestrate(
             upload_dir=settings.upload_dir, output_dir=settings.output_dir,
             timeout=settings.exec_timeout, max_retries=settings.llm_eval_retry_limit,
             score_threshold=settings.llm_eval_score_threshold, settings=settings,
+            rubric=rubric,
         )
         for attempt in llm_eval_debug_result.attempts:
             yield AgentLogEntry(phase="G", action="retry", content=f"リトライ {attempt.retry_num}: score={attempt.llm_score:.1f}/10 {attempt.reasoning[:100]}", timestamp=_now_iso())
@@ -297,7 +300,7 @@ async def orchestrate(
     # ------------------------------------------------------------------
     if settings.langfuse_enabled and exec_succeeded and python_code:
         try:
-            from services.llm_judge import evaluate_and_score
+            from evaluation.llm_judge import evaluate_and_score
             evaluate_and_score(task=task, code=python_code, settings=settings, trace=trace)
         except Exception:
             logger.warning("LLM judge evaluation failed", exc_info=True)

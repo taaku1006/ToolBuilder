@@ -13,9 +13,9 @@ import logging
 from dataclasses import dataclass
 
 from core.config import Settings
-from services.openai_client import OpenAIClient
-from services.prompt_loader import load_prompt
-from services.xlsx_parser import build_file_context, parse_file
+from infra.openai_client import OpenAIClient
+from infra.prompt_loader import load_prompt
+from excel.xlsx_parser import build_file_context, parse_file
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +43,7 @@ def evaluate_output(
     actual_path: str,
     expected_path: str,
     settings: Settings,
+    structured_report: str | None = None,
 ) -> EvalAgentResult | None:
     """Evaluate actual output against expected output using LLM.
 
@@ -51,6 +52,8 @@ def evaluate_output(
         actual_path: Path to the actual output file.
         expected_path: Path to the expected output file.
         settings: Application settings (for OpenAI client).
+        structured_report: Optional summary text from structured_comparator
+                           (value-based scan results, color checks, etc.).
 
     Returns:
         Frozen EvalAgentResult with scores, or None if evaluation fails.
@@ -64,6 +67,13 @@ def evaluate_output(
 
     try:
         template = load_prompt("eval_agent", settings)
+        if structured_report:
+            actual_context = (
+                actual_context
+                + "\n\n【構造化比較レポート】\n"
+                "OEE等の計算値はラベル検索で行位置によらず確認済みです。\n"
+                + structured_report
+            )
         prompt = (
             template
             .replace("{task}", task)

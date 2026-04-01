@@ -16,11 +16,11 @@ from fastapi.testclient import TestClient
 
 
 class TestBuildUserPrompt:
-    """Unit tests for services.prompt_builder.build_user_prompt."""
+    """Unit tests for infra.prompt_builder.build_user_prompt."""
 
     def test_task_only(self) -> None:
         """Without file_context the prompt contains only the task section."""
-        from services.prompt_builder import build_user_prompt
+        from infra.prompt_builder import build_user_prompt
 
         result = build_user_prompt("売上を集計する")
 
@@ -29,7 +29,7 @@ class TestBuildUserPrompt:
 
     def test_with_file_context(self) -> None:
         """When file_context is given it is prepended before the task section."""
-        from services.prompt_builder import build_user_prompt
+        from infra.prompt_builder import build_user_prompt
 
         result = build_user_prompt("集計する", file_context="A列: 日付, B列: 金額")
 
@@ -42,7 +42,7 @@ class TestBuildUserPrompt:
 
     def test_file_context_none_excludes_structure_section(self) -> None:
         """None file_context must NOT include the structure section."""
-        from services.prompt_builder import build_user_prompt
+        from infra.prompt_builder import build_user_prompt
 
         result = build_user_prompt("集計する", file_context=None)
 
@@ -50,7 +50,7 @@ class TestBuildUserPrompt:
 
     def test_empty_file_context_excludes_structure_section(self) -> None:
         """Empty string file_context must NOT include the structure section."""
-        from services.prompt_builder import build_user_prompt
+        from infra.prompt_builder import build_user_prompt
 
         result = build_user_prompt("集計する", file_context="")
 
@@ -58,14 +58,14 @@ class TestBuildUserPrompt:
 
     def test_system_prompt_is_string(self) -> None:
         """SYSTEM_PROMPT must be a non-empty string."""
-        from services.prompt_builder import SYSTEM_PROMPT
+        from infra.prompt_builder import SYSTEM_PROMPT
 
         assert isinstance(SYSTEM_PROMPT, str)
         assert len(SYSTEM_PROMPT) > 0
 
     def test_system_prompt_contains_json_instructions(self) -> None:
         """SYSTEM_PROMPT must instruct model to return JSON."""
-        from services.prompt_builder import SYSTEM_PROMPT
+        from infra.prompt_builder import SYSTEM_PROMPT
 
         assert "JSON" in SYSTEM_PROMPT
         assert "python_code" in SYSTEM_PROMPT

@@ -25,7 +25,7 @@ from schemas.skills import (
     SkillsListResponse,
     SkillUseRequest,
 )
-from services.sandbox import execute_code
+from infra.sandbox import execute_code
 
 router = APIRouter()
 

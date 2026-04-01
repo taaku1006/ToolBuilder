@@ -107,6 +107,9 @@ class TestCase:
     file_path: str | None = None
     expected_file_path: str | None = None
     expected_success: bool = True
+    # Optional task-specific evaluation rubric for structured comparison.
+    # Schema: {key_cells, value_scan, color_checks, sheet_visibility, extra_files}
+    rubric: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -213,4 +216,5 @@ def load_test_case(path: Path) -> TestCase:
         file_path=data.get("file_path"),
         expected_file_path=data.get("expected_file_path"),
         expected_success=data.get("expected_success", True),
+        rubric=data.get("rubric"),
     )

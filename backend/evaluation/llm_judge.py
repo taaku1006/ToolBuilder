@@ -10,7 +10,7 @@ import json
 import logging
 
 from core.config import Settings
-from services.openai_client import OpenAIClient
+from infra.openai_client import OpenAIClient
 
 logger = logging.getLogger(__name__)
 

@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from services.openai_client import OpenAIClient
+from infra.openai_client import OpenAIClient
 
 
 # ---------------------------------------------------------------------------
@@ -28,7 +28,7 @@ class TestOpenAIClientTokenTracking:
         mock_settings.openai_model = "gpt-4o"
         mock_settings.langfuse_enabled = False
 
-        with patch("services.openai_client.OpenAI"):
+        with patch("infra.openai_client.OpenAI"):
             client = OpenAIClient(mock_settings)
 
         assert client.total_tokens == 0
@@ -40,7 +40,7 @@ class TestOpenAIClientTokenTracking:
         mock_settings.openai_model = "gpt-4o"
         mock_settings.langfuse_enabled = False
 
-        with patch("services.openai_client.OpenAI") as mock_cls:
+        with patch("infra.openai_client.OpenAI") as mock_cls:
             mock_instance = MagicMock()
             mock_cls.return_value = mock_instance
 
@@ -68,7 +68,7 @@ class TestOpenAIClientTokenTracking:
         mock_settings.openai_model = "gpt-4o"
         mock_settings.langfuse_enabled = False
 
-        with patch("services.openai_client.OpenAI") as mock_cls:
+        with patch("infra.openai_client.OpenAI") as mock_cls:
             mock_instance = MagicMock()
             mock_cls.return_value = mock_instance
 
@@ -101,7 +101,7 @@ class TestOpenAIClientTokenTracking:
         mock_settings.openai_model = "gpt-4o"
         mock_settings.langfuse_enabled = False
 
-        with patch("services.openai_client.OpenAI") as mock_cls:
+        with patch("infra.openai_client.OpenAI") as mock_cls:
             mock_instance = MagicMock()
             mock_cls.return_value = mock_instance
 
@@ -129,7 +129,7 @@ class TestOrchestrateTokenReporting:
 
     @pytest.mark.asyncio
     async def test_result_payload_includes_tokens(self) -> None:
-        from services.agent_orchestrator import orchestrate
+        from pipeline.agent_orchestrator import orchestrate
 
         mock_settings = MagicMock()
         mock_settings.reflection_enabled = False
@@ -149,7 +149,7 @@ class TestOrchestrateTokenReporting:
             "tips": "",
         })
 
-        with patch("services.agent_orchestrator.OpenAIClient") as mock_client_cls:
+        with patch("pipeline.agent_orchestrator.OpenAIClient") as mock_client_cls:
             mock_client = MagicMock()
             mock_client.generate_code.return_value = mock_response
             mock_client.total_tokens = 1500

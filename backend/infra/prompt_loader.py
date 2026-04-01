@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from services.prompt_manager import get_prompt
+from infra.prompt_manager import get_prompt
 
 _PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 

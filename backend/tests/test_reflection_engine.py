@@ -1,4 +1,4 @@
-"""Unit tests for services.reflection_engine.
+"""Unit tests for pipeline.reflection_engine.
 
 TDD: tests written FIRST, implementation follows.
 All OpenAI calls and sandbox executions are mocked.
@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from services.openai_client import OpenAIClient
+from infra.openai_client import OpenAIClient
 
 
 # ---------------------------------------------------------------------------
@@ -29,7 +29,7 @@ def _make_openai_client(response_text: str) -> OpenAIClient:
 
 def _make_sandbox(stdout: str = "", success: bool = True) -> Callable:
     """Return a mock sandbox_execute that returns an ExecutionResult-like object."""
-    from services.sandbox import ExecutionResult
+    from infra.sandbox import ExecutionResult
 
     result = ExecutionResult(
         stdout=stdout,
@@ -54,7 +54,7 @@ class TestPhaseAResult:
     """PhaseAResult must be immutable and carry the right fields."""
 
     def test_frozen_dataclass(self) -> None:
-        from services.reflection_engine import PhaseAResult
+        from pipeline.reflection_engine import PhaseAResult
 
         r = PhaseAResult(
             exploration_script="print('hi')",
@@ -65,7 +65,7 @@ class TestPhaseAResult:
             r.success = False  # type: ignore[misc]
 
     def test_fields(self) -> None:
-        from services.reflection_engine import PhaseAResult
+        from pipeline.reflection_engine import PhaseAResult
 
         r = PhaseAResult(
             exploration_script="s",
@@ -86,7 +86,7 @@ class TestPhaseBResult:
     """PhaseBResult must be immutable."""
 
     def test_frozen_dataclass(self) -> None:
-        from services.reflection_engine import PhaseBResult
+        from pipeline.reflection_engine import PhaseBResult
 
         r = PhaseBResult(
             needs_custom_tool=False,
@@ -98,7 +98,7 @@ class TestPhaseBResult:
             r.needs_custom_tool = True  # type: ignore[misc]
 
     def test_fields_with_tool(self) -> None:
-        from services.reflection_engine import PhaseBResult
+        from pipeline.reflection_engine import PhaseBResult
 
         r = PhaseBResult(
             needs_custom_tool=True,
@@ -121,7 +121,7 @@ class TestPhaseCResult:
     """PhaseCResult must be immutable."""
 
     def test_frozen_dataclass(self) -> None:
-        from services.reflection_engine import PhaseCResult
+        from pipeline.reflection_engine import PhaseCResult
 
         r = PhaseCResult(
             summary="処理内容",
@@ -133,7 +133,7 @@ class TestPhaseCResult:
             r.summary = "changed"  # type: ignore[misc]
 
     def test_fields(self) -> None:
-        from services.reflection_engine import PhaseCResult
+        from pipeline.reflection_engine import PhaseCResult
 
         r = PhaseCResult(
             summary="要約",
@@ -156,7 +156,7 @@ class TestRunPhaseA:
     @pytest.mark.asyncio
     async def test_returns_phase_a_result(self) -> None:
         """run_phase_a returns a PhaseAResult with exploration_script set."""
-        from services.reflection_engine import PhaseAResult, run_phase_a
+        from pipeline.reflection_engine import PhaseAResult, run_phase_a
 
         script = "print('exploring')"
         client = _make_openai_client(script)
@@ -173,7 +173,7 @@ class TestRunPhaseA:
     @pytest.mark.asyncio
     async def test_exploration_script_from_openai(self) -> None:
         """exploration_script in result comes from OpenAI response."""
-        from services.reflection_engine import run_phase_a
+        from pipeline.reflection_engine import run_phase_a
 
         script = "import os\nprint(os.environ['INPUT_FILE'])"
         client = _make_openai_client(script)
@@ -190,7 +190,7 @@ class TestRunPhaseA:
     @pytest.mark.asyncio
     async def test_exploration_output_from_sandbox(self) -> None:
         """exploration_output comes from sandbox stdout."""
-        from services.reflection_engine import run_phase_a
+        from pipeline.reflection_engine import run_phase_a
 
         client = _make_openai_client("print('output')")
         sandbox = _make_sandbox(stdout="output\n", success=True)
@@ -205,7 +205,7 @@ class TestRunPhaseA:
 
     @pytest.mark.asyncio
     async def test_success_true_when_sandbox_succeeds(self) -> None:
-        from services.reflection_engine import run_phase_a
+        from pipeline.reflection_engine import run_phase_a
 
         client = _make_openai_client("print('ok')")
         sandbox = _make_sandbox(stdout="ok", success=True)
@@ -220,7 +220,7 @@ class TestRunPhaseA:
 
     @pytest.mark.asyncio
     async def test_success_false_when_sandbox_fails(self) -> None:
-        from services.reflection_engine import run_phase_a
+        from pipeline.reflection_engine import run_phase_a
 
         client = _make_openai_client("raise ValueError()")
         sandbox = _make_sandbox(stdout="", success=False)
@@ -236,7 +236,7 @@ class TestRunPhaseA:
     @pytest.mark.asyncio
     async def test_openai_called_with_phase_a_prompt(self) -> None:
         """OpenAI must be called with a prompt containing the file context."""
-        from services.reflection_engine import run_phase_a
+        from pipeline.reflection_engine import run_phase_a
 
         client = _make_openai_client("print('ok')")
         sandbox = _make_sandbox()
@@ -256,7 +256,7 @@ class TestRunPhaseA:
     @pytest.mark.asyncio
     async def test_empty_file_context_still_works(self) -> None:
         """run_phase_a works with empty file context."""
-        from services.reflection_engine import run_phase_a
+        from pipeline.reflection_engine import run_phase_a
 
         client = _make_openai_client("print('ok')")
         sandbox = _make_sandbox(stdout="ok", success=True)
@@ -293,7 +293,7 @@ class TestRunPhaseB:
 
     @pytest.mark.asyncio
     async def test_returns_phase_b_result(self) -> None:
-        from services.reflection_engine import PhaseBResult, run_phase_b
+        from pipeline.reflection_engine import PhaseBResult, run_phase_b
 
         client = _make_openai_client(
             self._phase_b_response(needs_custom_tool=False, reason="simple task")
@@ -311,7 +311,7 @@ class TestRunPhaseB:
 
     @pytest.mark.asyncio
     async def test_no_custom_tool_needed(self) -> None:
-        from services.reflection_engine import run_phase_b
+        from pipeline.reflection_engine import run_phase_b
 
         client = _make_openai_client(
             self._phase_b_response(needs_custom_tool=False, reason="simple")
@@ -333,7 +333,7 @@ class TestRunPhaseB:
     @pytest.mark.asyncio
     async def test_custom_tool_executed_when_needed(self) -> None:
         """When needs_custom_tool=True, tool_code is executed in sandbox."""
-        from services.reflection_engine import run_phase_b
+        from pipeline.reflection_engine import run_phase_b
 
         tool_code = "print('custom tool output')"
         client = _make_openai_client(
@@ -348,7 +348,7 @@ class TestRunPhaseB:
 
         def capturing_sandbox(code: str, **kwargs):  # noqa: ANN001
             executed_codes.append(code)
-            from services.sandbox import ExecutionResult
+            from infra.sandbox import ExecutionResult
 
             return ExecutionResult(
                 stdout="custom tool output\n",
@@ -373,7 +373,7 @@ class TestRunPhaseB:
     @pytest.mark.asyncio
     async def test_tool_output_captured(self) -> None:
         """tool_output in result is sandbox stdout when custom tool runs."""
-        from services.reflection_engine import run_phase_b
+        from pipeline.reflection_engine import run_phase_b
 
         client = _make_openai_client(
             self._phase_b_response(
@@ -396,7 +396,7 @@ class TestRunPhaseB:
     @pytest.mark.asyncio
     async def test_exploration_result_in_prompt(self) -> None:
         """OpenAI prompt must include exploration_result."""
-        from services.reflection_engine import run_phase_b
+        from pipeline.reflection_engine import run_phase_b
 
         client = _make_openai_client(
             self._phase_b_response(needs_custom_tool=False)
@@ -416,7 +416,7 @@ class TestRunPhaseB:
     @pytest.mark.asyncio
     async def test_task_in_prompt(self) -> None:
         """OpenAI prompt must include task."""
-        from services.reflection_engine import run_phase_b
+        from pipeline.reflection_engine import run_phase_b
 
         client = _make_openai_client(
             self._phase_b_response(needs_custom_tool=False)
@@ -436,7 +436,7 @@ class TestRunPhaseB:
     @pytest.mark.asyncio
     async def test_invalid_json_response_raises(self) -> None:
         """If OpenAI returns non-JSON, run_phase_b raises ValueError."""
-        from services.reflection_engine import run_phase_b
+        from pipeline.reflection_engine import run_phase_b
 
         client = _make_openai_client("not valid json")
         sandbox = _make_sandbox()
@@ -477,7 +477,7 @@ class TestRunPhaseC:
 
     @pytest.mark.asyncio
     async def test_returns_phase_c_result(self) -> None:
-        from services.reflection_engine import PhaseCResult, run_phase_c
+        from pipeline.reflection_engine import PhaseCResult, run_phase_c
 
         client = _make_openai_client(self._phase_c_response())
 
@@ -493,7 +493,7 @@ class TestRunPhaseC:
 
     @pytest.mark.asyncio
     async def test_summary_from_openai(self) -> None:
-        from services.reflection_engine import run_phase_c
+        from pipeline.reflection_engine import run_phase_c
 
         client = _make_openai_client(
             self._phase_c_response(summary="Excelの集計処理です")
@@ -511,7 +511,7 @@ class TestRunPhaseC:
 
     @pytest.mark.asyncio
     async def test_python_code_from_openai(self) -> None:
-        from services.reflection_engine import run_phase_c
+        from pipeline.reflection_engine import run_phase_c
 
         expected_code = "import pandas as pd\ndf = pd.read_excel(INPUT_FILE)"
         client = _make_openai_client(self._phase_c_response(python_code=expected_code))
@@ -528,7 +528,7 @@ class TestRunPhaseC:
 
     @pytest.mark.asyncio
     async def test_steps_is_list(self) -> None:
-        from services.reflection_engine import run_phase_c
+        from pipeline.reflection_engine import run_phase_c
 
         client = _make_openai_client(
             self._phase_c_response(steps=["読み込み", "集計", "保存"])
@@ -547,7 +547,7 @@ class TestRunPhaseC:
     @pytest.mark.asyncio
     async def test_all_context_in_prompt(self) -> None:
         """exploration_result, reflection_result, and task all appear in prompt."""
-        from services.reflection_engine import run_phase_c
+        from pipeline.reflection_engine import run_phase_c
 
         client = _make_openai_client(self._phase_c_response())
 
@@ -567,7 +567,7 @@ class TestRunPhaseC:
     @pytest.mark.asyncio
     async def test_invalid_json_response_raises(self) -> None:
         """If OpenAI returns non-JSON, run_phase_c raises ValueError or JSONDecodeError."""
-        from services.reflection_engine import run_phase_c
+        from pipeline.reflection_engine import run_phase_c
 
         client = _make_openai_client("not json")
 
@@ -583,7 +583,7 @@ class TestRunPhaseC:
     @pytest.mark.asyncio
     async def test_missing_field_raises(self) -> None:
         """If OpenAI JSON is missing required field, raises KeyError or ValueError."""
-        from services.reflection_engine import run_phase_c
+        from pipeline.reflection_engine import run_phase_c
 
         client = _make_openai_client(json.dumps({"summary": "only summary"}))
 

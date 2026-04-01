@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from core.config import Settings
-from services.agent_orchestrator import AgentLogEntry, CancelledError
+from pipeline.agent_orchestrator import AgentLogEntry, CancelledError
 
 
 # ---------------------------------------------------------------------------
@@ -75,8 +75,8 @@ class TestHandlePhaseA:
     @pytest.mark.asyncio
     async def test_yields_start_entry(self) -> None:
         """Phase A start entry must be yielded."""
-        from services.phase_handlers import handle_phase_a
-        from services.reflection_engine import PhaseAResult
+        from pipeline.phase_handlers import handle_phase_a
+        from pipeline.reflection_engine import PhaseAResult
 
         settings = _make_settings()
         openai_client = _make_mock_openai_client()
@@ -89,7 +89,7 @@ class TestHandlePhaseA:
         )
 
         with patch(
-            "services.phase_handlers.run_phase_a",
+            "pipeline.phase_handlers.run_phase_a",
             new=AsyncMock(return_value=phase_a_result),
         ):
             entries = await collect_entries(
@@ -110,8 +110,8 @@ class TestHandlePhaseA:
     @pytest.mark.asyncio
     async def test_yields_complete_on_success(self) -> None:
         """Phase A complete entry must be yielded when exploration succeeds."""
-        from services.phase_handlers import handle_phase_a
-        from services.reflection_engine import PhaseAResult
+        from pipeline.phase_handlers import handle_phase_a
+        from pipeline.reflection_engine import PhaseAResult
 
         settings = _make_settings()
         openai_client = _make_mock_openai_client()
@@ -124,7 +124,7 @@ class TestHandlePhaseA:
         )
 
         with patch(
-            "services.phase_handlers.run_phase_a",
+            "pipeline.phase_handlers.run_phase_a",
             new=AsyncMock(return_value=phase_a_result),
         ):
             entries = await collect_entries(
@@ -145,8 +145,8 @@ class TestHandlePhaseA:
     @pytest.mark.asyncio
     async def test_yields_error_on_failure(self) -> None:
         """Phase A error entry must be yielded when exploration fails."""
-        from services.phase_handlers import handle_phase_a
-        from services.reflection_engine import PhaseAResult
+        from pipeline.phase_handlers import handle_phase_a
+        from pipeline.reflection_engine import PhaseAResult
 
         settings = _make_settings()
         openai_client = _make_mock_openai_client()
@@ -159,7 +159,7 @@ class TestHandlePhaseA:
         )
 
         with patch(
-            "services.phase_handlers.run_phase_a",
+            "pipeline.phase_handlers.run_phase_a",
             new=AsyncMock(return_value=phase_a_result),
         ):
             entries = await collect_entries(
@@ -180,8 +180,8 @@ class TestHandlePhaseA:
     @pytest.mark.asyncio
     async def test_returns_exploration_result(self) -> None:
         """handle_phase_a must return the exploration output via state mutation."""
-        from services.phase_handlers import handle_phase_a, PhaseAState
-        from services.reflection_engine import PhaseAResult
+        from pipeline.phase_handlers import handle_phase_a, PhaseAState
+        from pipeline.reflection_engine import PhaseAResult
 
         settings = _make_settings()
         openai_client = _make_mock_openai_client()
@@ -195,7 +195,7 @@ class TestHandlePhaseA:
         )
 
         with patch(
-            "services.phase_handlers.run_phase_a",
+            "pipeline.phase_handlers.run_phase_a",
             new=AsyncMock(return_value=phase_a_result),
         ):
             await collect_entries(
@@ -216,8 +216,8 @@ class TestHandlePhaseA:
     @pytest.mark.asyncio
     async def test_cancel_raises_error(self) -> None:
         """cancel_check returning True must raise CancelledError."""
-        from services.phase_handlers import handle_phase_a
-        from services.reflection_engine import PhaseAResult
+        from pipeline.phase_handlers import handle_phase_a
+        from pipeline.reflection_engine import PhaseAResult
 
         settings = _make_settings()
         openai_client = _make_mock_openai_client()
@@ -232,7 +232,7 @@ class TestHandlePhaseA:
         cancel_check = MagicMock(return_value=True)
 
         with patch(
-            "services.phase_handlers.run_phase_a",
+            "pipeline.phase_handlers.run_phase_a",
             new=AsyncMock(return_value=phase_a_result),
         ):
             with pytest.raises(CancelledError):
@@ -260,8 +260,8 @@ class TestHandlePhaseB:
     @pytest.mark.asyncio
     async def test_yields_start_and_complete(self) -> None:
         """Phase B must yield start and complete entries."""
-        from services.phase_handlers import handle_phase_b
-        from services.reflection_engine import PhaseBResult
+        from pipeline.phase_handlers import handle_phase_b
+        from pipeline.reflection_engine import PhaseBResult
 
         settings = _make_settings()
         openai_client = _make_mock_openai_client()
@@ -275,7 +275,7 @@ class TestHandlePhaseB:
         )
 
         with patch(
-            "services.phase_handlers.run_phase_b",
+            "pipeline.phase_handlers.run_phase_b",
             new=AsyncMock(return_value=phase_b_result),
         ):
             entries = await collect_entries(
@@ -300,8 +300,8 @@ class TestHandlePhaseB:
     @pytest.mark.asyncio
     async def test_returns_reflection_result_json(self) -> None:
         """handle_phase_b must store reflection result as JSON."""
-        from services.phase_handlers import handle_phase_b, PhaseBState
-        from services.reflection_engine import PhaseBResult
+        from pipeline.phase_handlers import handle_phase_b, PhaseBState
+        from pipeline.reflection_engine import PhaseBResult
 
         settings = _make_settings()
         openai_client = _make_mock_openai_client()
@@ -316,7 +316,7 @@ class TestHandlePhaseB:
         )
 
         with patch(
-            "services.phase_handlers.run_phase_b",
+            "pipeline.phase_handlers.run_phase_b",
             new=AsyncMock(return_value=phase_b_result),
         ):
             await collect_entries(
@@ -349,8 +349,8 @@ class TestHandlePhaseD:
     @pytest.mark.asyncio
     async def test_yields_start_entry(self) -> None:
         """Phase D start entry must be yielded."""
-        from services.phase_handlers import handle_phase_d
-        from services.sandbox import ExecutionResult
+        from pipeline.phase_handlers import handle_phase_d
+        from infra.sandbox import ExecutionResult
 
         settings = _make_settings(debug_loop_enabled=True)
         openai_client = _make_mock_openai_client()
@@ -365,7 +365,7 @@ class TestHandlePhaseD:
         )
 
         with patch(
-            "services.phase_handlers.execute_code",
+            "pipeline.phase_handlers.execute_code",
             return_value=success_result,
         ):
             entries = await collect_entries(
@@ -389,8 +389,8 @@ class TestHandlePhaseD:
     @pytest.mark.asyncio
     async def test_yields_complete_on_first_success(self) -> None:
         """Phase D complete entry when first execution succeeds."""
-        from services.phase_handlers import handle_phase_d
-        from services.sandbox import ExecutionResult
+        from pipeline.phase_handlers import handle_phase_d
+        from infra.sandbox import ExecutionResult
 
         settings = _make_settings(debug_loop_enabled=True)
         openai_client = _make_mock_openai_client()
@@ -405,7 +405,7 @@ class TestHandlePhaseD:
         )
 
         with patch(
-            "services.phase_handlers.execute_code",
+            "pipeline.phase_handlers.execute_code",
             return_value=success_result,
         ):
             entries = await collect_entries(
@@ -428,9 +428,9 @@ class TestHandlePhaseD:
     @pytest.mark.asyncio
     async def test_yields_retry_and_complete_on_debug_success(self) -> None:
         """Phase D retry and complete when debug loop fixes the error."""
-        from services.phase_handlers import handle_phase_d
-        from services.debug_loop import DebugAttempt, DebugResult
-        from services.sandbox import ExecutionResult
+        from pipeline.phase_handlers import handle_phase_d
+        from pipeline.debug_loop import DebugAttempt, DebugResult
+        from infra.sandbox import ExecutionResult
 
         settings = _make_settings(debug_loop_enabled=True)
         openai_client = _make_mock_openai_client()
@@ -461,9 +461,9 @@ class TestHandlePhaseD:
         )
 
         with (
-            patch("services.phase_handlers.execute_code", return_value=fail_result),
+            patch("pipeline.phase_handlers.execute_code", return_value=fail_result),
             patch(
-                "services.phase_handlers.run_debug_loop",
+                "pipeline.phase_handlers.run_debug_loop",
                 new=AsyncMock(return_value=debug_success),
             ),
         ):
@@ -488,9 +488,9 @@ class TestHandlePhaseD:
     @pytest.mark.asyncio
     async def test_state_updated_with_final_code(self) -> None:
         """Phase D state must contain final_code after successful debug."""
-        from services.phase_handlers import handle_phase_d, PhaseDState
-        from services.debug_loop import DebugAttempt, DebugResult
-        from services.sandbox import ExecutionResult
+        from pipeline.phase_handlers import handle_phase_d, PhaseDState
+        from pipeline.debug_loop import DebugAttempt, DebugResult
+        from infra.sandbox import ExecutionResult
 
         settings = _make_settings(debug_loop_enabled=True)
         openai_client = _make_mock_openai_client()
@@ -523,9 +523,9 @@ class TestHandlePhaseD:
         )
 
         with (
-            patch("services.phase_handlers.execute_code", return_value=fail_result),
+            patch("pipeline.phase_handlers.execute_code", return_value=fail_result),
             patch(
-                "services.phase_handlers.run_debug_loop",
+                "pipeline.phase_handlers.run_debug_loop",
                 new=AsyncMock(return_value=debug_success),
             ),
         ):
@@ -559,8 +559,8 @@ class TestHandlePhaseP:
     @pytest.mark.asyncio
     async def test_no_decompose_yields_complete(self) -> None:
         """When decompose=False, P/complete is yielded with single-step message."""
-        from services.phase_handlers import handle_phase_p
-        from services.task_planner import PlanResult
+        from pipeline.phase_handlers import handle_phase_p
+        from pipeline.task_planner import PlanResult
 
         settings = _make_settings(task_decomposition_enabled=True)
         openai_client = _make_mock_openai_client()
@@ -573,7 +573,7 @@ class TestHandlePhaseP:
         )
 
         with patch(
-            "services.phase_handlers.run_planner",
+            "pipeline.phase_handlers.run_planner",
             new=AsyncMock(return_value=no_decomp_plan),
         ):
             entries = await collect_entries(
@@ -598,9 +598,9 @@ class TestHandlePhaseP:
     @pytest.mark.asyncio
     async def test_decompose_yields_subtask_entries(self) -> None:
         """When decompose=True, subtask phase entries are yielded."""
-        from services.phase_handlers import handle_phase_p
-        from services.task_planner import PlanResult, SubTask
-        from services.sandbox import ExecutionResult
+        from pipeline.phase_handlers import handle_phase_p
+        from pipeline.task_planner import PlanResult, SubTask
+        from infra.sandbox import ExecutionResult
 
         settings = _make_settings(task_decomposition_enabled=True)
         openai_client = _make_mock_openai_client()
@@ -624,15 +624,15 @@ class TestHandlePhaseP:
 
         with (
             patch(
-                "services.phase_handlers.run_planner",
+                "pipeline.phase_handlers.run_planner",
                 new=AsyncMock(return_value=decomp_plan),
             ),
             patch(
-                "services.phase_handlers.run_phase_c_subtask",
+                "pipeline.phase_handlers.run_phase_c_subtask",
                 new=AsyncMock(return_value="print('subtask code')"),
             ),
             patch(
-                "services.phase_handlers.execute_code",
+                "pipeline.phase_handlers.execute_code",
                 return_value=success_exec,
             ),
         ):
@@ -658,9 +658,9 @@ class TestHandlePhaseP:
     @pytest.mark.asyncio
     async def test_decompose_state_updated_on_success(self) -> None:
         """When all subtasks succeed, state reflects decomposition success."""
-        from services.phase_handlers import handle_phase_p, PhasePState
-        from services.task_planner import PlanResult, SubTask
-        from services.sandbox import ExecutionResult
+        from pipeline.phase_handlers import handle_phase_p, PhasePState
+        from pipeline.task_planner import PlanResult, SubTask
+        from infra.sandbox import ExecutionResult
 
         settings = _make_settings(task_decomposition_enabled=True)
         openai_client = _make_mock_openai_client()
@@ -684,15 +684,15 @@ class TestHandlePhaseP:
 
         with (
             patch(
-                "services.phase_handlers.run_planner",
+                "pipeline.phase_handlers.run_planner",
                 new=AsyncMock(return_value=decomp_plan),
             ),
             patch(
-                "services.phase_handlers.run_phase_c_subtask",
+                "pipeline.phase_handlers.run_phase_c_subtask",
                 new=AsyncMock(return_value="print('done')"),
             ),
             patch(
-                "services.phase_handlers.execute_code",
+                "pipeline.phase_handlers.execute_code",
                 return_value=success_exec,
             ),
         ):
@@ -726,7 +726,7 @@ class TestHandlePhaseE:
     @pytest.mark.asyncio
     async def test_yields_suggest_save_when_exec_succeeded(self) -> None:
         """When execution succeeded, Phase E suggests saving as skill."""
-        from services.phase_handlers import handle_phase_e
+        from pipeline.phase_handlers import handle_phase_e
 
         settings = _make_settings(skills_enabled=True)
         trace = _make_mock_trace()
@@ -756,7 +756,7 @@ class TestHandlePhaseE:
     @pytest.mark.asyncio
     async def test_no_suggest_save_when_exec_failed(self) -> None:
         """When execution failed, Phase E does not suggest saving."""
-        from services.phase_handlers import handle_phase_e
+        from pipeline.phase_handlers import handle_phase_e
 
         settings = _make_settings(skills_enabled=True)
         trace = _make_mock_trace()

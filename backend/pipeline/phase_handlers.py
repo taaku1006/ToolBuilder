@@ -19,12 +19,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from core.config import Settings
-from services.debug_loop import run_debug_loop
-from services.openai_client import OpenAIClient
-from services.orchestrator_types import AgentLogEntry, CancelledError, _now_iso
-from services.reflection_engine import run_phase_a, run_phase_b, run_phase_c_subtask
-from services.sandbox import execute_code
-from services.task_planner import run_planner
+from pipeline.debug_loop import run_debug_loop
+from infra.openai_client import OpenAIClient
+from pipeline.orchestrator_types import AgentLogEntry, CancelledError, _now_iso
+from pipeline.reflection_engine import run_phase_a, run_phase_b, run_phase_c_subtask
+from infra.sandbox import execute_code
+from pipeline.task_planner import run_planner
 
 
 # ---------------------------------------------------------------------------

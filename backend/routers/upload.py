@@ -22,8 +22,8 @@ from db.engine import get_db
 from db.models import Skill
 from schemas.skills import SkillSuggestion
 from schemas.upload import SheetInfoSchema, UploadResponse
-from services.skills_engine import match_skills
-from services.xlsx_parser import SheetInfo, parse_file
+from pipeline.skills_engine import match_skills
+from excel.xlsx_parser import SheetInfo, parse_file
 
 router = APIRouter()
 
