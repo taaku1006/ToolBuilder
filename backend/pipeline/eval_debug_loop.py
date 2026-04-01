@@ -243,8 +243,12 @@ async def run_eval_debug_loop(
             logger.warning("Eval agent call failed in debug loop", exc_info=True)
 
     # Retry loop
+    last_exec_error: str | None = None
+
     for retry_num in range(1, max_retries + 1):
         comparison_summary = _build_comparison_summary(comparison)
+        if last_exec_error:
+            comparison_summary = f"【直前の実行エラー】\n{last_exec_error}\n\n" + comparison_summary
 
         logger.info(
             "Eval debug loop retry",
@@ -275,17 +279,20 @@ async def run_eval_debug_loop(
         exec_result = await _execute(fixed_code)
 
         if not exec_result.success:
+            last_exec_error = exec_result.stderr[:800] if exec_result.stderr else "execution failed"
             attempt = EvalDebugAttempt(
                 retry_num=retry_num,
                 mechanical_score=0.0,
                 eval_reasoning=eval_reasoning if retry_num == 1 else None,
-                comparison_summary="execution failed",
+                comparison_summary=f"execution failed: {last_exec_error[:100]}",
                 fixed_code=fixed_code,
                 success=False,
             )
             attempts = [*attempts, attempt]
             current_code = fixed_code
             continue
+
+        last_exec_error = None
 
         # Find output and compare
         actual_path = find_best_output_match(exec_result.output_files, expected_file_path)

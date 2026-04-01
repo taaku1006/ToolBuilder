@@ -222,6 +222,7 @@ async def run_llm_eval_debug_loop(
         )
 
     current_structured = _structured_report(actual_path)
+    last_exec_error: str | None = None
 
     # Retry loop
     for retry_num in range(1, max_retries + 1):
@@ -229,6 +230,10 @@ async def run_llm_eval_debug_loop(
             "LLM eval debug loop retry",
             extra={"retry_num": retry_num, "current_score": eval_result.overall},
         )
+
+        structured_with_error = current_structured or ""
+        if last_exec_error:
+            structured_with_error = f"【直前の実行エラー】\n{last_exec_error}\n\n" + structured_with_error
 
         # Build fix prompt with eval feedback + structured cell-level comparison
         prompt = _build_fix_prompt(
@@ -238,7 +243,7 @@ async def run_llm_eval_debug_loop(
             eval_result=eval_result,
             file_context=file_context or "",
             settings=settings,
-            structured_comparison=current_structured,
+            structured_comparison=structured_with_error or None,
         )
 
         fixed_code = openai_client.generate_code(
@@ -250,14 +255,17 @@ async def run_llm_eval_debug_loop(
         exec_result = await _execute(fixed_code)
 
         if not exec_result.success:
+            last_exec_error = exec_result.stderr[:800] if exec_result.stderr else "execution failed"
             attempt = LlmEvalDebugAttempt(
                 retry_num=retry_num, llm_score=0.0,
                 semantic_correctness=0.0, data_integrity=0.0, completeness=0.0,
-                reasoning="execution failed", fixed_code=fixed_code, success=False,
+                reasoning=f"execution failed: {last_exec_error[:100]}", fixed_code=fixed_code, success=False,
             )
             attempts = [*attempts, attempt]
             current_code = fixed_code
             continue
+
+        last_exec_error = None
 
         actual_path = find_best_output_match(exec_result.output_files, expected_file_path)
         if not actual_path:
