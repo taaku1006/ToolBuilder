@@ -589,9 +589,9 @@ class TestOrchestratePhaseD:
 
         with (
             patch("services.agent_orchestrator.OpenAIClient") as mock_cls,
-            patch("services.agent_orchestrator.execute_code") as mock_exec,
+            patch("services.phase_handlers.execute_code") as mock_exec,
             patch(
-                "services.agent_orchestrator.run_debug_loop",
+                "services.phase_handlers.run_debug_loop",
                 new=AsyncMock(return_value=debug_result_with_retry),
             ),
         ):

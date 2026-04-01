@@ -10,16 +10,14 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import asdict, dataclass
-from pathlib import Path
+from dataclasses import dataclass
 
 from core.config import Settings
 from services.openai_client import OpenAIClient
+from services.prompt_loader import load_prompt
 from services.xlsx_parser import build_file_context, parse_file
 
 logger = logging.getLogger(__name__)
-
-_PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 
 
 @dataclass(frozen=True)
@@ -31,21 +29,6 @@ class EvalAgentResult:
     completeness: float          # 0-10
     overall: float               # 0-10
     reasoning: str
-
-
-def _load_eval_prompt() -> str:
-    """Load the evaluation agent prompt template."""
-    try:
-        from services.reflection_engine import _settings_ref
-
-        if _settings_ref is not None:
-            from services.prompt_manager import get_prompt
-
-            return get_prompt("eval_agent", _settings_ref)
-    except Exception:
-        pass
-    prompt_path = _PROMPTS_DIR / "eval_agent.txt"
-    return prompt_path.read_text(encoding="utf-8")
 
 
 def _file_to_context(path: str) -> str:
@@ -80,7 +63,7 @@ def evaluate_output(
         return None
 
     try:
-        template = _load_eval_prompt()
+        template = load_prompt("eval_agent", settings)
         prompt = (
             template
             .replace("{task}", task)

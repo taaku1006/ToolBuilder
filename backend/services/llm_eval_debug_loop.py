@@ -10,17 +10,15 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
-from pathlib import Path
 
 from services.eval_agent import EvalAgentResult, evaluate_output
 from services.excel_comparator import find_best_output_match
 from services.openai_client import OpenAIClient
+from services.prompt_loader import load_prompt
 from services.sandbox import ExecutionResult
 from services.xlsx_parser import build_file_context, parse_file
 
 logger = logging.getLogger(__name__)
-
-_PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 
 
 # ---------------------------------------------------------------------------
@@ -59,30 +57,16 @@ class LlmEvalDebugResult:
 # ---------------------------------------------------------------------------
 
 
-def _load_prompt() -> str:
-    """Load the Phase G prompt template."""
-    try:
-        from services.reflection_engine import _settings_ref
-
-        if _settings_ref is not None:
-            from services.prompt_manager import get_prompt
-
-            return get_prompt("phase_g_llm_eval_debug", _settings_ref)
-    except Exception:
-        pass
-    prompt_path = _PROMPTS_DIR / "phase_g_llm_eval_debug.txt"
-    return prompt_path.read_text(encoding="utf-8")
-
-
 def _build_fix_prompt(
     task: str,
     code: str,
     expected_context: str,
     eval_result: EvalAgentResult,
     file_context: str,
+    settings=None,
 ) -> str:
     """Build the code improvement prompt from LLM eval feedback."""
-    template = _load_prompt()
+    template = load_prompt("phase_g_llm_eval_debug", settings)
     return (
         template
         .replace("{task}", task)
@@ -140,7 +124,7 @@ async def run_llm_eval_debug_loop(
         timeout: Maximum execution time per attempt.
         max_retries: Maximum fix-and-retry cycles.
         score_threshold: Minimum LLM eval score to pass (0-10).
-        settings: Application settings (for eval agent).
+        settings: Application settings (for eval agent and Langfuse prompts).
 
     Returns:
         Frozen LlmEvalDebugResult with final code, score, and attempt history.
@@ -235,6 +219,7 @@ async def run_llm_eval_debug_loop(
             expected_context=expected_context,
             eval_result=eval_result,
             file_context=file_context or "",
+            settings=settings,
         )
 
         fixed_code = openai_client.generate_code(

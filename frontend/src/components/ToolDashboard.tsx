@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSkillsStore } from '../stores/useSkillsStore'
 import type { SkillItem } from '../types'
+import { ExecutionResultPanel } from './shared/ExecutionResultPanel'
 
 function formatDate(iso: string): string {
   try {
@@ -92,52 +93,15 @@ function RunResultPanel() {
     <div className="bg-gray-800 border border-gray-700 rounded-xl p-5 space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-gray-300">実行結果</h3>
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-gray-500">{runResult.elapsed_ms}ms</span>
-          {runResult.success ? (
-            <span className="px-2 py-0.5 text-xs font-medium bg-green-900 text-green-300 rounded">
-              成功
-            </span>
-          ) : (
-            <span className="px-2 py-0.5 text-xs font-medium bg-red-900 text-red-300 rounded">
-              エラー
-            </span>
-          )}
-        </div>
       </div>
 
-      {runResult.stdout && (
-        <pre className="text-xs text-gray-400 bg-gray-900 rounded-lg p-3 overflow-x-auto max-h-40 overflow-y-auto">
-          {runResult.stdout}
-        </pre>
-      )}
-
-      {runResult.stderr && (
-        <pre className="text-xs text-red-400 bg-gray-900 rounded-lg p-3 overflow-x-auto max-h-40 overflow-y-auto">
-          {runResult.stderr}
-        </pre>
-      )}
-
-      {runResult.output_files.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-xs text-gray-500">出力ファイル</p>
-          <div className="flex flex-wrap gap-2">
-            {runResult.output_files.map((filePath) => {
-              const fileName = filePath.split('/').pop() || filePath
-              return (
-                <a
-                  key={filePath}
-                  href={`/api/download/${filePath}`}
-                  download={fileName}
-                  className="inline-flex items-center gap-2 px-4 py-2 text-sm bg-blue-700 hover:bg-blue-600 text-white rounded-lg transition-colors"
-                >
-                  &#8595; {fileName}
-                </a>
-              )
-            })}
-          </div>
-        </div>
-      )}
+      <ExecutionResultPanel
+        success={runResult.success}
+        elapsedMs={runResult.elapsed_ms}
+        stdout={runResult.stdout || undefined}
+        stderr={runResult.stderr || undefined}
+        outputFiles={runResult.output_files}
+      />
 
       <button
         onClick={clearRunResult}

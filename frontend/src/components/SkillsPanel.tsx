@@ -1,6 +1,8 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { useSkillsStore } from '../stores/useSkillsStore'
 import type { SkillItem, SkillSuggestion } from '../types'
+import { useFileInput } from '../hooks/useFileInput'
+import { ExecutionResultPanel } from './shared/ExecutionResultPanel'
 
 function TagBadge({ tag }: { tag: string }) {
   return (
@@ -80,29 +82,26 @@ function SuggestionCard({ suggestion }: { suggestion: SkillSuggestion }) {
 
 function SkillRunner({ skillId, skillTitle }: { skillId: string; skillTitle: string }) {
   const { executeSkill, runResult, running, clearRunResult } = useSkillsStore()
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
+  const { inputRef, triggerOpen, handleChange } = useFileInput(
+    '.xlsx,.xls,.csv',
+    (file) => {
       void executeSkill(skillId, file)
     }
-    // Reset so the same file can be selected again
-    if (fileInputRef.current) fileInputRef.current.value = ''
-  }
+  )
 
   return (
     <div className="mt-2 space-y-2">
       <input
-        ref={fileInputRef}
+        ref={inputRef}
         type="file"
         accept=".xlsx,.xls,.csv"
-        onChange={handleFileSelect}
+        onChange={handleChange}
         className="hidden"
       />
       <button
         className="w-full px-3 py-2 text-sm bg-green-700 hover:bg-green-600 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        onClick={() => fileInputRef.current?.click()}
+        onClick={triggerOpen}
         disabled={running}
       >
         {running ? '実行中...' : `▶ ${skillTitle} を実行`}
@@ -111,38 +110,12 @@ function SkillRunner({ skillId, skillTitle }: { skillId: string; skillTitle: str
 
       {runResult && (
         <div className="bg-gray-800 rounded p-3 space-y-2">
-          <div className="flex items-center gap-2">
-            {runResult.success ? (
-              <span className="text-xs font-medium bg-green-900 text-green-300 px-2 py-0.5 rounded">成功</span>
-            ) : (
-              <span className="text-xs font-medium bg-red-900 text-red-300 px-2 py-0.5 rounded">エラー</span>
-            )}
-            <span className="text-xs text-gray-500">{runResult.elapsed_ms}ms</span>
-          </div>
-
-          {runResult.stdout && (
-            <pre className="text-xs text-gray-400 bg-gray-900 rounded p-2 overflow-x-auto max-h-32 overflow-y-auto">
-              {runResult.stdout}
-            </pre>
-          )}
-
-          {runResult.output_files.length > 0 && (
-            <div className="space-y-1">
-              {runResult.output_files.map((filePath) => {
-                const fileName = filePath.split('/').pop() || filePath
-                return (
-                  <a
-                    key={filePath}
-                    href={`/api/download/${filePath}`}
-                    download={fileName}
-                    className="flex items-center gap-2 px-2 py-1.5 text-xs bg-blue-900 hover:bg-blue-800 text-blue-200 rounded transition-colors"
-                  >
-                    &#8595; {fileName}
-                  </a>
-                )
-              })}
-            </div>
-          )}
+          <ExecutionResultPanel
+            success={runResult.success}
+            elapsedMs={runResult.elapsed_ms}
+            stdout={runResult.stdout || undefined}
+            outputFiles={runResult.output_files}
+          />
 
           <button
             onClick={clearRunResult}

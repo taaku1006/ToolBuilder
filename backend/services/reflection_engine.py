@@ -10,9 +10,9 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass
-from pathlib import Path
 
 from services.openai_client import OpenAIClient
+from services.prompt_loader import load_prompt
 from services.sandbox import ExecutionResult
 
 logger = logging.getLogger(__name__)
@@ -20,30 +20,6 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Result dataclasses — all frozen (immutable)
 # ---------------------------------------------------------------------------
-
-_PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
-
-# Optional prompt manager (used when settings is available)
-_settings_ref = None
-
-
-def set_settings_ref(settings) -> None:
-    """Store settings reference for prompt_manager access."""
-    global _settings_ref
-    _settings_ref = settings
-
-
-def _load_prompt(name: str, fallback_file: str) -> str:
-    """Load prompt via prompt_manager if available, else read file."""
-    if _settings_ref is not None:
-        try:
-            from services.prompt_manager import get_prompt
-
-            return get_prompt(name, _settings_ref)
-        except Exception:
-            pass
-    path = _PROMPTS_DIR / fallback_file
-    return path.read_text(encoding="utf-8")
 
 
 @dataclass(frozen=True)
@@ -87,6 +63,7 @@ async def run_phase_a(
     file_id: str | None = None,
     upload_dir: str = "./uploads",
     output_dir: str = "./outputs",
+    settings=None,
 ) -> PhaseAResult:
     """Generate an exploration script via OpenAI and execute it in the sandbox.
 
@@ -106,7 +83,7 @@ async def run_phase_a(
         extra={"file_id": file_id, "file_context_length": len(file_context)},
     )
 
-    system_prompt = _load_prompt("phase_a_exploration", "phase_a_exploration.txt")
+    system_prompt = load_prompt("phase_a_exploration", settings)
 
     # Build user prompt from file context
     user_prompt = f"【ファイル情報】\n{file_context}" if file_context else "ファイル情報なし"
@@ -154,6 +131,7 @@ async def run_phase_b(
     file_id: str | None = None,
     upload_dir: str = "./uploads",
     output_dir: str = "./outputs",
+    settings=None,
 ) -> PhaseBResult:
     """Reflect on whether specialised tools are needed.
 
@@ -170,7 +148,7 @@ async def run_phase_b(
     """
     logger.info("Phase B started", extra={"task_length": len(task)})
 
-    template = _load_prompt("phase_b_reflect", "phase_b_reflect.txt")
+    template = load_prompt("phase_b_reflect", settings)
 
     formatted = (
         template
@@ -223,6 +201,7 @@ async def run_phase_c(
     reflection_result: str,
     task: str,
     file_context: str | None = None,
+    settings=None,
 ) -> PhaseCResult:
     """Generate the main Python code using all accumulated context.
 
@@ -239,7 +218,7 @@ async def run_phase_c(
         extra={"task_length": len(task), "has_file_context": file_context is not None},
     )
 
-    template = _load_prompt("phase_c_generate", "phase_c_generate.txt")
+    template = load_prompt("phase_c_generate", settings)
 
     formatted_system = (
         template
@@ -289,6 +268,7 @@ async def run_phase_c_subtask(
     file_context: str | None,
     completed_summaries: str,
     available_files: str,
+    settings=None,
 ) -> str:
     """Generate Python code for a single sub-task.
 
@@ -300,7 +280,7 @@ async def run_phase_c_subtask(
         extra={"subtask_title": subtask_title},
     )
 
-    template = _load_prompt("phase_c_subtask", "phase_c_subtask.txt")
+    template = load_prompt("phase_c_subtask", settings)
     prompt = (
         template
         .replace("{task}", task)

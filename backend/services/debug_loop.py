@@ -12,14 +12,12 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
-from pathlib import Path
 
 from services.openai_client import OpenAIClient
+from services.prompt_loader import load_prompt
 from services.sandbox import ExecutionResult
 
 logger = logging.getLogger(__name__)
-
-_PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 
 
 # ---------------------------------------------------------------------------
@@ -49,35 +47,16 @@ class DebugResult:
     total_retries: int             # number of retries actually performed
 
 
-# ---------------------------------------------------------------------------
-# Prompt loader
-# ---------------------------------------------------------------------------
-
-
-def _load_debug_prompt() -> str:
-    """Load the Phase D debug prompt template."""
-    try:
-        from services.reflection_engine import _settings_ref
-
-        if _settings_ref is not None:
-            from services.prompt_manager import get_prompt
-
-            return get_prompt("phase_d_debug", _settings_ref)
-    except Exception:
-        pass
-    prompt_path = _PROMPTS_DIR / "phase_d_debug.txt"
-    return prompt_path.read_text(encoding="utf-8")
-
-
 def _build_debug_prompt(
     task: str,
     code: str,
     stderr: str,
     stdout: str,
     file_context: str,
+    settings=None,
 ) -> str:
     """Substitute template placeholders and return the formatted prompt."""
-    template = _load_debug_prompt()
+    template = load_prompt("phase_d_debug", settings)
     return (
         template
         .replace("{task}", task)
@@ -104,6 +83,7 @@ async def run_debug_loop(
     output_dir: str = "./outputs",
     timeout: int = 30,
     max_retries: int = 3,
+    settings=None,
 ) -> DebugResult:
     """Execute code in the sandbox; on failure ask OpenAI to fix it and retry.
 
@@ -126,6 +106,7 @@ async def run_debug_loop(
         output_dir: Parent directory for execution temp dirs.
         timeout: Maximum execution time in seconds for each run.
         max_retries: Maximum number of fix-and-retry cycles.
+        settings: Optional Settings instance for Langfuse prompt loading.
 
     Returns:
         Frozen DebugResult with final code, stdout/stderr, success flag,
@@ -179,6 +160,7 @@ async def run_debug_loop(
             stderr=exec_result.stderr,
             stdout=exec_result.stdout,
             file_context=file_context or "",
+            settings=settings,
         )
 
         fixed_code: str = openai_client.generate_code(  # type: ignore[union-attr]

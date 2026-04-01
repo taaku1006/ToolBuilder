@@ -300,8 +300,8 @@ class TestOrchestratePhaseTokens:
         with (
             patch("services.agent_orchestrator.OpenAIClient", return_value=CountingClient()),
             patch("services.agent_orchestrator._resolve_file_context", return_value="file context"),
-            patch("services.agent_orchestrator.run_phase_a", return_value=phase_a_result) as mock_a,
-            patch("services.agent_orchestrator.run_phase_b", return_value=phase_b_result) as mock_b,
+            patch("services.phase_handlers.run_phase_a", return_value=phase_a_result) as mock_a,
+            patch("services.phase_handlers.run_phase_b", return_value=phase_b_result) as mock_b,
             patch("services.agent_orchestrator.run_phase_c") as mock_c,
         ):
             # run_phase_a and run_phase_b are async — make them awaitable

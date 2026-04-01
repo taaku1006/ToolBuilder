@@ -1,4 +1,8 @@
-"""Eval harness API endpoints."""
+"""Eval harness API endpoints.
+
+This router is a thin HTTP handler. All business logic lives in
+`services.eval_run_manager.EvalRunManager`.
+"""
 
 from __future__ import annotations
 
@@ -8,16 +12,17 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Form, HTTPException, UploadFile
 from fastapi import File as FastAPIFile
 from pydantic import BaseModel
 
 from core.config import Settings
 from core.deps import get_settings
-from eval.models import EvalMetrics, EvalResult, load_architecture, load_test_case
-from eval.report import EvalReport, RunComparison, compare_runs
+from eval.models import load_architecture, load_test_case
+from eval.report import EvalReport, compare_runs
 from eval.runner import EvalRunner
 from eval.versioning import capture_run_snapshot, diff_snapshots
+from services.eval_run_manager import EvalRunManager
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +35,8 @@ _RESULTS_DIR = _EVAL_DIR / "results"
 
 _ALLOWED_EVAL_EXTENSIONS = {".xlsx", ".xls", ".csv"}
 
-# In-memory run status tracking
-_run_status: dict[str, dict] = {}
+# Module-level singleton so _run_status persists across requests
+_manager = EvalRunManager(settings=get_settings())
 
 
 # ---------------------------------------------------------------------------
@@ -72,38 +77,13 @@ class RunStatusOut(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _settings_factory(overrides: dict | None = None) -> Settings:
-    settings = get_settings()
-    if overrides:
-        for key, value in overrides.items():
-            object.__setattr__(settings, key, value)
-    return settings
-
-
-def _load_archs() -> list:
-    if not _ARCHS_DIR.exists():
-        return []
-    return [load_architecture(p) for p in sorted(_ARCHS_DIR.glob("*.json"))]
-
-
-def _load_cases() -> list:
-    if not _CASES_DIR.exists():
-        return []
-    return [load_test_case(p) for p in sorted(_CASES_DIR.glob("*.json"))]
-
-
-# ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
 
 
 @router.get("/eval/architectures")
 async def list_architectures() -> list[ArchitectureOut]:
-    archs = _load_archs()
+    archs = _manager.list_architectures(archs_dir=_ARCHS_DIR)
     return [
         ArchitectureOut(
             id=a.id,
@@ -132,7 +112,7 @@ async def list_architectures() -> list[ArchitectureOut]:
 
 @router.get("/eval/test-cases")
 async def list_test_cases() -> list[TestCaseOut]:
-    cases = _load_cases()
+    cases = _manager.list_test_cases(cases_dir=_CASES_DIR)
     return [
         TestCaseOut(
             id=c.id,
@@ -152,8 +132,8 @@ async def start_eval_run(
     background_tasks: BackgroundTasks,
 ) -> RunStatusOut:
     """Start an eval run in the background."""
-    all_archs = _load_archs()
-    all_cases = _load_cases()
+    all_archs = _manager.list_architectures(archs_dir=_ARCHS_DIR)
+    all_cases = _manager.list_test_cases(cases_dir=_CASES_DIR)
 
     archs = (
         [a for a in all_archs if a.id in req.architecture_ids]
@@ -168,37 +148,33 @@ async def start_eval_run(
 
     run_id = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
     total = len(archs) * len(cases)
-
-    _run_status[run_id] = {
-        "status": "running",
-        "progress": 0,
-        "total": total,
-        "report": None,
-        "cancel_requested": False,
-    }
+    _manager.start_run(run_id=run_id, total=total)
 
     async def _run() -> None:
         try:
             runner = EvalRunner(
                 architectures=archs,
                 test_cases=cases,
-                settings_factory=_settings_factory,
-                cancel_check=lambda: _run_status[run_id]["cancel_requested"],
+                settings_factory=_manager.settings_factory,
+                cancel_check=lambda: (_manager.get_status(run_id) or {}).get(
+                    "cancel_requested", False
+                ),
             )
 
             results = []
             for arch in archs:
                 for case in cases:
-                    if _run_status[run_id]["cancel_requested"]:
+                    status = _manager.get_status(run_id) or {}
+                    if status.get("cancel_requested"):
                         logger.info("Eval run cancelled", extra={"run_id": run_id})
                         break
                     result = await runner.run_single(arch, case)
                     results.append(result)
-                    _run_status[run_id]["progress"] = len(results)
-                if _run_status[run_id]["cancel_requested"]:
+                    _manager.update_progress(run_id=run_id, progress=len(results))
+                if (_manager.get_status(run_id) or {}).get("cancel_requested"):
                     break
 
-            cancelled = _run_status[run_id]["cancel_requested"]
+            cancelled = (_manager.get_status(run_id) or {}).get("cancel_requested", False)
 
             if results:
                 output_dir = _RESULTS_DIR / f"run_{run_id}"
@@ -209,13 +185,18 @@ async def start_eval_run(
                 runner.save_results(results, output_dir, snapshot=snapshot)
                 report = EvalReport(results)
                 report.save(output_dir / "report.json")
-                _run_status[run_id]["report"] = report.to_dict()
+                _manager.complete_run(run_id=run_id, report=report.to_dict())
+            elif cancelled:
+                _manager.mark_stopped(run_id=run_id)
+            else:
+                _manager.complete_run(run_id=run_id, report=None)
 
-            _run_status[run_id]["status"] = "stopped" if cancelled else "completed"
+            if cancelled and results:
+                _manager.mark_stopped(run_id=run_id)
+
         except Exception as exc:
             logger.exception("Eval run failed")
-            _run_status[run_id]["status"] = "failed"
-            _run_status[run_id]["report"] = {"error": str(exc)}
+            _manager.fail_run(run_id=run_id, error=str(exc))
 
     background_tasks.add_task(_run)
 
@@ -230,14 +211,13 @@ async def start_eval_run(
 @router.post("/eval/run/{run_id}/stop")
 async def stop_eval_run(run_id: str) -> RunStatusOut:
     """Request cancellation of a running eval."""
-    if run_id not in _run_status:
+    s = _manager.get_status(run_id)
+    if s is None:
         raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
-
-    s = _run_status[run_id]
     if s["status"] != "running":
         raise HTTPException(status_code=400, detail=f"Run is not running (status: {s['status']})")
 
-    s["cancel_requested"] = True
+    _manager.stop_run(run_id)
     logger.info("Eval stop requested", extra={"run_id": run_id})
 
     return RunStatusOut(
@@ -251,7 +231,8 @@ async def stop_eval_run(run_id: str) -> RunStatusOut:
 @router.get("/eval/run/{run_id}")
 async def get_eval_status(run_id: str) -> RunStatusOut:
     """Poll eval run status."""
-    if run_id not in _run_status:
+    s = _manager.get_status(run_id)
+    if s is None:
         # Try loading from disk
         result_dir = _RESULTS_DIR / f"run_{run_id}"
         report_path = result_dir / "report.json"
@@ -264,11 +245,8 @@ async def get_eval_status(run_id: str) -> RunStatusOut:
                 total=report_data.get("total_runs", 0),
                 report=report_data,
             )
-        return RunStatusOut(
-            run_id=run_id, status="not_found", progress=0, total=0
-        )
+        return RunStatusOut(run_id=run_id, status="not_found", progress=0, total=0)
 
-    s = _run_status[run_id]
     return RunStatusOut(
         run_id=run_id,
         status=s["status"],
@@ -281,30 +259,7 @@ async def get_eval_status(run_id: str) -> RunStatusOut:
 @router.get("/eval/runs")
 async def list_runs() -> list[dict]:
     """List past eval runs."""
-    runs = []
-    if _RESULTS_DIR.exists():
-        for d in sorted(_RESULTS_DIR.iterdir(), reverse=True):
-            if d.is_dir() and d.name.startswith("run_"):
-                report_path = d / "report.json"
-                run_id = d.name.removeprefix("run_")
-                entry: dict = {"run_id": run_id, "status": "completed"}
-                if report_path.exists():
-                    report_data = json.loads(report_path.read_text(encoding="utf-8"))
-                    entry["best_architecture"] = report_data.get("best_architecture")
-                    entry["summary"] = report_data.get("summary")
-                runs.append(entry)
-
-    # Add in-memory running runs
-    for run_id, s in _run_status.items():
-        if s["status"] == "running":
-            runs.insert(0, {
-                "run_id": run_id,
-                "status": "running",
-                "progress": s["progress"],
-                "total": s["total"],
-            })
-
-    return runs
+    return _manager.list_runs(results_dir=_RESULTS_DIR)
 
 
 # ---------------------------------------------------------------------------
@@ -319,12 +274,7 @@ async def create_test_case(
     file: UploadFile | None = FastAPIFile(default=None),
     expected_file: UploadFile | None = FastAPIFile(default=None),
 ) -> TestCaseOut:
-    """Create a new test case (with optional input file and expected output file).
-
-    Saves the test case as a JSON file in the eval test_cases directory.
-    If files are uploaded, they are saved to eval/test_cases/files/ and
-    the paths are recorded in the test case JSON.
-    """
+    """Create a new test case with optional input and expected output files."""
     stripped_task = task.strip()
     if not stripped_task:
         raise HTTPException(status_code=422, detail="'task' must not be empty or whitespace")
@@ -336,7 +286,6 @@ async def create_test_case(
     files_dir = _CASES_DIR / "files"
     files_dir.mkdir(parents=True, exist_ok=True)
 
-    # Save input file
     if file is not None:
         filename = file.filename or ""
         ext = Path(filename).suffix.lower()
@@ -354,7 +303,6 @@ async def create_test_case(
         dest.write_bytes(content)
         file_path = str(dest)
 
-    # Save expected output file
     if expected_file is not None:
         filename = expected_file.filename or ""
         ext = Path(filename).suffix.lower()
@@ -402,17 +350,10 @@ async def create_test_case(
 
 @router.delete("/eval/test-cases/{case_id}", status_code=204)
 async def delete_test_case(case_id: str) -> None:
-    """Delete a test case by ID.
-
-    Removes the JSON file and, if the test case has an associated file,
-    removes that file too.
-    """
-    # Find the JSON file — could be named <case_id>.json or <anything>.json
-    # matching by id field inside for pre-defined cases not named by uuid
+    """Delete a test case by ID."""
     json_file = _CASES_DIR / f"{case_id}.json"
 
     if not json_file.exists():
-        # Search all JSON files for one whose 'id' matches
         found = None
         if _CASES_DIR.exists():
             for p in _CASES_DIR.glob("*.json"):
@@ -427,17 +368,14 @@ async def delete_test_case(case_id: str) -> None:
             raise HTTPException(status_code=404, detail=f"Test case '{case_id}' not found")
         json_file = found
 
-    # Load the case data to find the file_path
     try:
         case_data = json.loads(json_file.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         case_data = {}
 
-    # Remove associated file if present
     file_path = case_data.get("file_path")
     if file_path:
-        fp = Path(file_path)
-        fp.unlink(missing_ok=True)
+        Path(file_path).unlink(missing_ok=True)
 
     json_file.unlink()
 
@@ -450,72 +388,30 @@ async def delete_test_case(case_id: str) -> None:
 @router.get("/eval/run/{run_id}/snapshot")
 async def get_run_snapshot(run_id: str) -> dict:
     """Return the prompt/config snapshot captured for this run."""
-    snapshot_path = _RESULTS_DIR / f"run_{run_id}" / "snapshot.json"
-    if not snapshot_path.exists():
+    try:
+        snapshot = _manager.load_snapshot(run_id=run_id, results_dir=_RESULTS_DIR)
+    except FileNotFoundError:
         raise HTTPException(
             status_code=404,
             detail=f"Snapshot not found for run '{run_id}'",
         )
-    return json.loads(snapshot_path.read_text(encoding="utf-8"))
+    return snapshot.to_dict()
 
 
 @router.get("/eval/run/{run_id}/compare/{baseline_id}")
 async def compare_eval_runs(run_id: str, baseline_id: str) -> dict:
-    """Compare two eval runs and return regression/fix analysis.
+    """Compare two eval runs and return regression/fix analysis."""
+    try:
+        current = _manager.load_results(run_id=run_id, results_dir=_RESULTS_DIR)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
 
-    Compares *run_id* (current) against *baseline_id* (previous/baseline).
+    try:
+        baseline = _manager.load_results(run_id=baseline_id, results_dir=_RESULTS_DIR)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Run '{baseline_id}' not found")
 
-    Returns a dict with keys:
-      - regressions: list of {test_case_id, architecture_id} that flipped pass→fail
-      - fixes: list of {test_case_id, architecture_id} that flipped fail→pass
-      - unchanged_pass: count of pairs that stayed passing
-      - unchanged_fail: count of pairs that stayed failing
-      - new_cases: list of test_case_ids present in current but not in baseline
-    """
-
-    def _load_results(rid: str) -> list[EvalResult]:
-        summary_path = _RESULTS_DIR / f"run_{rid}" / "summary.json"
-        if not summary_path.exists():
-            raise HTTPException(
-                status_code=404,
-                detail=f"Run '{rid}' not found",
-            )
-        raw = json.loads(summary_path.read_text(encoding="utf-8"))
-        results: list[EvalResult] = []
-        for item in raw.get("results", []):
-            m = item.get("metrics", {})
-            results.append(
-                EvalResult(
-                    architecture_id=item["architecture_id"],
-                    test_case_id=item["test_case_id"],
-                    metrics=EvalMetrics(
-                        success=m.get("success", False),
-                        total_duration_ms=m.get("total_duration_ms", 0),
-                        total_tokens=m.get("total_tokens", 0),
-                        prompt_tokens=m.get("prompt_tokens", 0),
-                        completion_tokens=m.get("completion_tokens", 0),
-                        api_calls=m.get("api_calls", 0),
-                        phase_durations_ms=m.get("phase_durations_ms", {}),
-                        phase_tokens=m.get("phase_tokens", {}),
-                        retry_count=m.get("retry_count", 0),
-                        code_executes=m.get("code_executes", False),
-                        error_category=m.get("error_category", "none"),
-                        quality_score=m.get("quality_score"),
-                        quality_details=m.get("quality_details"),
-                        llm_eval_score=m.get("llm_eval_score"),
-                        llm_eval_details=m.get("llm_eval_details"),
-                    ),
-                    agent_log=item.get("agent_log", []),
-                    model=item.get("model", "gpt-4o"),
-                    generated_code=item.get("generated_code"),
-                    error=item.get("error"),
-                )
-            )
-        return results
-
-    current = _load_results(run_id)
-    baseline = _load_results(baseline_id)
-
+    from eval.report import RunComparison
     comparison: RunComparison = compare_runs(current, baseline)
     return {
         "regressions": comparison.regressions,
@@ -529,30 +425,17 @@ async def compare_eval_runs(run_id: str, baseline_id: str) -> dict:
 
 @router.get("/eval/run/{run_id}/diff/{other_id}")
 async def diff_run_snapshots(run_id: str, other_id: str) -> dict:
-    """Return the diff between two run snapshots.
+    """Return the diff between two run snapshots."""
+    try:
+        snap_a = _manager.load_snapshot(run_id=run_id, results_dir=_RESULTS_DIR)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Snapshot not found for run '{run_id}'")
 
-    Compares the snapshot of *run_id* (snapshot a) against *other_id* (snapshot b).
-    """
-    _prompts_dir = Path(__file__).parent.parent / "prompts"
+    try:
+        snap_b = _manager.load_snapshot(run_id=other_id, results_dir=_RESULTS_DIR)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Snapshot not found for run '{other_id}'")
 
-    def _load_snapshot(rid: str):
-        path = _RESULTS_DIR / f"run_{rid}" / "snapshot.json"
-        if not path.exists():
-            raise HTTPException(
-                status_code=404,
-                detail=f"Snapshot not found for run '{rid}'",
-            )
-        raw = json.loads(path.read_text(encoding="utf-8"))
-        from eval.versioning import RunSnapshot
-        return RunSnapshot(
-            prompt_hashes=raw["prompt_hashes"],
-            prompt_contents=raw["prompt_contents"],
-            architecture_configs=raw["architecture_configs"],
-            snapshot_hash=raw["snapshot_hash"],
-        )
-
-    snap_a = _load_snapshot(run_id)
-    snap_b = _load_snapshot(other_id)
     diff = diff_snapshots(snap_a, snap_b)
     return {
         "run_id": run_id,
@@ -574,7 +457,6 @@ async def get_result_files(run_id: str, arch_id: str, case_id: str) -> dict:
     for item in raw.get("results", []):
         if item["architecture_id"] == arch_id and item["test_case_id"] == case_id:
             files = item.get("output_files", [])
-            # Filter to files that still exist
             existing = [f for f in files if Path(f).exists()]
             return {
                 "architecture_id": arch_id,

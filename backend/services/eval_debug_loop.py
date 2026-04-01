@@ -10,16 +10,14 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
-from pathlib import Path
 
 from services.excel_comparator import ComparisonResult, compare_excel_files, find_best_output_match
 from services.openai_client import OpenAIClient
+from services.prompt_loader import load_prompt
 from services.sandbox import ExecutionResult
 from services.xlsx_parser import build_file_context, parse_file
 
 logger = logging.getLogger(__name__)
-
-_PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 
 
 # ---------------------------------------------------------------------------
@@ -55,21 +53,6 @@ class EvalDebugResult:
 # ---------------------------------------------------------------------------
 
 
-def _load_eval_debug_prompt() -> str:
-    """Load the Phase F prompt template."""
-    try:
-        from services.reflection_engine import _settings_ref
-
-        if _settings_ref is not None:
-            from services.prompt_manager import get_prompt
-
-            return get_prompt("phase_f_eval_debug", _settings_ref)
-    except Exception:
-        pass
-    prompt_path = _PROMPTS_DIR / "phase_f_eval_debug.txt"
-    return prompt_path.read_text(encoding="utf-8")
-
-
 def _build_comparison_summary(result: ComparisonResult) -> str:
     """Build a human-readable summary of the mechanical comparison."""
     lines = [f"Overall score: {result.overall_score:.2%}"]
@@ -98,9 +81,10 @@ def _build_eval_debug_prompt(
     comparison_summary: str,
     eval_reasoning: str,
     file_context: str,
+    settings=None,
 ) -> str:
     """Substitute template placeholders and return the formatted prompt."""
-    template = _load_eval_debug_prompt()
+    template = load_prompt("phase_f_eval_debug", settings)
     return (
         template
         .replace("{task}", task)
@@ -150,7 +134,7 @@ async def run_eval_debug_loop(
         timeout: Maximum execution time per attempt.
         max_retries: Maximum fix-and-retry cycles.
         quality_threshold: Minimum mechanical score to pass (0.0-1.0).
-        settings: Application settings (for eval agent).
+        settings: Application settings (for eval agent and Langfuse prompts).
 
     Returns:
         Frozen EvalDebugResult with final code, score, and attempt history.
@@ -268,6 +252,7 @@ async def run_eval_debug_loop(
             comparison_summary=comparison_summary,
             eval_reasoning=eval_reasoning,
             file_context=file_context or "",
+            settings=settings,
         )
 
         fixed_code = openai_client.generate_code(

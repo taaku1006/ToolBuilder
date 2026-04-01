@@ -9,13 +9,11 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
-from pathlib import Path
 
 from services.openai_client import OpenAIClient
+from services.prompt_loader import load_prompt
 
 logger = logging.getLogger(__name__)
-
-_PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 
 
 # ---------------------------------------------------------------------------
@@ -45,26 +43,6 @@ class PlanResult:
 
 
 # ---------------------------------------------------------------------------
-# Prompt loader
-# ---------------------------------------------------------------------------
-
-
-def _load_prompt(name: str) -> str:
-    """Load a prompt template, preferring Langfuse when available."""
-    try:
-        from services.reflection_engine import _settings_ref
-
-        if _settings_ref is not None:
-            from services.prompt_manager import get_prompt
-
-            return get_prompt(name, _settings_ref)
-    except Exception:
-        pass
-    prompt_path = _PROMPTS_DIR / f"{name}.txt"
-    return prompt_path.read_text(encoding="utf-8")
-
-
-# ---------------------------------------------------------------------------
 # Planner: decides whether to decompose and produces sub-tasks
 # ---------------------------------------------------------------------------
 
@@ -76,13 +54,14 @@ async def run_planner(
     reflection_result: str,
     file_context: str | None,
     max_subtasks: int = 5,
+    settings=None,
 ) -> PlanResult:
     """Analyze a task and decide whether to decompose it.
 
     Returns a PlanResult. When decompose=False, subtasks contains
     a single entry representing the whole task.
     """
-    template = _load_prompt("phase_p_plan")
+    template = load_prompt("phase_p_plan", settings)
     prompt = (
         template
         .replace("{task}", task)
@@ -152,13 +131,14 @@ async def run_replanner(
     exploration_result: str,
     file_context: str | None,
     max_subtasks: int = 5,
+    settings=None,
 ) -> PlanResult:
     """Re-plan based on Phase F quality feedback.
 
     Takes the previous plan and evaluation feedback, produces a new plan
     targeting only the failed/missing parts.
     """
-    template = _load_prompt("phase_p_replan")
+    template = load_prompt("phase_p_replan", settings)
 
     previous_plan_str = json.dumps(
         [{"id": st.id, "title": st.title, "description": st.description}
