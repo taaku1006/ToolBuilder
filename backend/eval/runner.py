@@ -276,23 +276,15 @@ class EvalRunner:
                 logger.warning("LLM eval agent failed", exc_info=True)
 
         # ----- Final success determination -----
-        # No output file produced when one was expected = failure
-        if success and case.expected_file_path and Path(case.expected_file_path).exists():
-            if not output_files_for_compare:
+        has_expected = case.expected_file_path and Path(case.expected_file_path).exists()
+
+        if success and has_expected:
+            # 期待値ファイルがある場合: 品質比較の結果で判定
+            if quality_score is not None:
+                success = quality_score >= settings.eval_debug_quality_threshold
+            else:
+                # 出力ファイルなし・比較失敗・再実行失敗 = 失敗
                 success = False
-
-        # Mechanical comparison (Phase F gate)
-        mechanical_success = True
-        if quality_score is not None:
-            mechanical_success = quality_score >= settings.eval_debug_quality_threshold
-
-        # LLM evaluation (Phase G gate)
-        llm_eval_success = True
-        if llm_eval_score is not None:
-            llm_eval_success = llm_eval_score >= settings.llm_eval_score_threshold
-
-        if success:
-            success = mechanical_success and llm_eval_success
 
         return EvalResult(
             architecture_id=arch.id,
