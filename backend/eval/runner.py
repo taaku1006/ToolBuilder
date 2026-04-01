@@ -276,6 +276,11 @@ class EvalRunner:
                 logger.warning("LLM eval agent failed", exc_info=True)
 
         # ----- Final success determination -----
+        # No output file produced when one was expected = failure
+        if success and case.expected_file_path and Path(case.expected_file_path).exists():
+            if not output_files_for_compare:
+                success = False
+
         # Mechanical comparison (Phase F gate)
         mechanical_success = True
         if quality_score is not None:
