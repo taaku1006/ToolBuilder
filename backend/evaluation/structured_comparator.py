@@ -74,6 +74,14 @@ class ColorCheckResult:
 
 
 @dataclass
+class CellDiff:
+    sheet: str
+    coord: str
+    expected: object
+    actual: object
+
+
+@dataclass
 class SheetStructureResult:
     missing_sheets: list[str]
     unexpected_sheets: list[str]
@@ -88,6 +96,11 @@ class StructuredCompareReport:
     value_scan_results: list[ValueScanResult]
     color_check_results: list[ColorCheckResult]
     extra_file_results: list[dict]
+    cell_diffs: list[CellDiff] = None  # type: ignore[assignment]
+
+    def __post_init__(self) -> None:
+        if self.cell_diffs is None:
+            object.__setattr__(self, "cell_diffs", [])
 
     def to_dict(self) -> dict:
         return {
@@ -104,6 +117,15 @@ class StructuredCompareReport:
     def summary_text(self) -> str:
         """Build a human-readable summary for LLM consumption."""
         lines: list[str] = []
+
+        # Cell-level diffs come first — most actionable for code fixes
+        if self.cell_diffs:
+            lines.append("[セルレベル差分（上位件）]")
+            for d in self.cell_diffs:
+                lines.append(
+                    f"  [{d.sheet}] {d.coord}: 期待={d.expected!r} 実際={d.actual!r}"
+                )
+            lines.append("")
 
         ss = self.sheet_structure
         if ss.missing_sheets:
@@ -413,6 +435,70 @@ def _check_extra_files(
     return results
 
 
+def _compare_all_cells(
+    wb_actual: openpyxl.Workbook,
+    wb_expected: openpyxl.Workbook,
+    sheets: list[str] | None = None,
+    top_n: int = 25,
+) -> list[CellDiff]:
+    """Compare all cells across sheets and return top_n mismatches.
+
+    Prioritises numeric mismatches (data errors) over string mismatches
+    (structural issues), then by row/column order.
+
+    Args:
+        wb_actual: Generated workbook.
+        wb_expected: Reference workbook.
+        sheets: Sheet names to compare. Defaults to all sheets in expected.
+        top_n: Maximum number of diffs to return.
+
+    Returns:
+        List of CellDiff sorted by priority (numeric first, then row order).
+    """
+    from openpyxl.utils import get_column_letter
+
+    target_sheets = sheets or wb_expected.sheetnames
+    numeric_diffs: list[CellDiff] = []
+    string_diffs: list[CellDiff] = []
+
+    for sheet_name in target_sheets:
+        if sheet_name not in wb_expected.sheetnames:
+            continue
+        if sheet_name not in wb_actual.sheetnames:
+            continue
+
+        ws_e = wb_expected[sheet_name]
+        ws_a = wb_actual[sheet_name]
+
+        for row in ws_e.iter_rows():
+            for cell_e in row:
+                exp_val = cell_e.value
+                if exp_val is None:
+                    continue
+
+                act_val = ws_a.cell(cell_e.row, cell_e.column).value
+                if _values_close(act_val, exp_val):
+                    continue
+
+                coord = f"{get_column_letter(cell_e.column)}{cell_e.row}"
+                diff = CellDiff(
+                    sheet=sheet_name,
+                    coord=coord,
+                    expected=exp_val,
+                    actual=act_val,
+                )
+                # Separate numeric vs string diffs for priority ordering
+                try:
+                    float(exp_val)
+                    numeric_diffs.append(diff)
+                except (TypeError, ValueError):
+                    string_diffs.append(diff)
+
+    # Numeric mismatches are higher priority (calculation errors)
+    combined = numeric_diffs + string_diffs
+    return combined[:top_n]
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -467,10 +553,15 @@ def compare_excel_structured(
         rubric.get("extra_files", []), search_dir=extra_file_search_dir
     )
 
+    # Full cell diff — compare specified sheets or fall back to all sheets
+    diff_sheets = rubric.get("diff_sheets") or None
+    cell_diffs = _compare_all_cells(wb_actual, wb_expected, sheets=diff_sheets, top_n=25)
+
     return StructuredCompareReport(
         sheet_structure=sheet_structure,
         key_cell_results=key_cell_results,
         value_scan_results=value_scan_results,
         color_check_results=color_check_results,
         extra_file_results=extra_file_results,
+        cell_diffs=cell_diffs,
     )
