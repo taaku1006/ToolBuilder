@@ -65,9 +65,11 @@ def _build_fix_prompt(
     eval_result: EvalAgentResult,
     file_context: str,
     settings=None,
+    structured_comparison: str | None = None,
 ) -> str:
     """Build the code improvement prompt from LLM eval feedback."""
     template = load_prompt("phase_g_llm_eval_debug", settings)
+    comparison_section = structured_comparison or "(構造化比較なし)"
     return (
         template
         .replace("{task}", task)
@@ -79,6 +81,7 @@ def _build_fix_prompt(
         .replace("{overall}", f"{eval_result.overall:.1f}")
         .replace("{reasoning}", eval_result.reasoning)
         .replace("{file_context}", file_context)
+        .replace("{structured_comparison}", comparison_section)
     )
 
 
@@ -218,6 +221,8 @@ async def run_llm_eval_debug_loop(
             attempts=[], total_retries=0, final_eval=eval_result,
         )
 
+    current_structured = _structured_report(actual_path)
+
     # Retry loop
     for retry_num in range(1, max_retries + 1):
         logger.info(
@@ -225,7 +230,7 @@ async def run_llm_eval_debug_loop(
             extra={"retry_num": retry_num, "current_score": eval_result.overall},
         )
 
-        # Build fix prompt with eval feedback
+        # Build fix prompt with eval feedback + structured cell-level comparison
         prompt = _build_fix_prompt(
             task=task,
             code=current_code,
@@ -233,6 +238,7 @@ async def run_llm_eval_debug_loop(
             eval_result=eval_result,
             file_context=file_context or "",
             settings=settings,
+            structured_comparison=current_structured,
         )
 
         fixed_code = openai_client.generate_code(
@@ -265,10 +271,11 @@ async def run_llm_eval_debug_loop(
             continue
 
         # Re-evaluate with LLM
+        current_structured = _structured_report(actual_path)
         eval_result = await asyncio.to_thread(
             evaluate_output, task=task, actual_path=actual_path,
             expected_path=expected_file_path, settings=settings,
-            structured_report=_structured_report(actual_path),
+            structured_report=current_structured,
         )
 
         if eval_result is None:
