@@ -40,4 +40,33 @@
 - broad な try/except で全体を囲まないこと
 - 処理完了時に print('処理が正常に完了しました') を出力すること
 
+【pandas ChainedAssignment エラーの修正（重要）】
+新しい pandas では `df[condition]['col'] = value` はエラーになります。必ず `.loc[]` を使用してください:
+- 誤り: `df[df['A'] > 0]['B'] = 1`
+- 正しい: `df.loc[df['A'] > 0, 'B'] = 1`
+- 誤り: `df.groupby('A').sum()['B'] = 1`
+- 正しい: 集計結果は新しい変数に代入して使用する
+
+【openpyxl 重要注意事項】
+- `wb['シート名'] = ws` は無効。ワークシートをこの方法で代入することはできない
+- 別ブックにシートをコピーするには以下のパターンを使用すること:
+  ```python
+  from copy import copy
+  def copy_sheet_to_workbook(src_ws, dst_wb, new_name):
+      dst_ws = dst_wb.create_sheet(new_name)
+      for row in src_ws.iter_rows():
+          for cell in row:
+              dst_cell = dst_ws.cell(row=cell.row, column=cell.column, value=cell.value)
+              if cell.has_style:
+                  dst_cell.font = copy(cell.font)
+                  dst_cell.fill = copy(cell.fill)
+                  dst_cell.border = copy(cell.border)
+                  dst_cell.alignment = copy(cell.alignment)
+                  dst_cell.number_format = cell.number_format
+      for merge in src_ws.merged_cells.ranges:
+          dst_ws.merge_cells(str(merge))
+      return dst_ws
+  ```
+- `wb.copy_worksheet(ws)` は同一ブック内のみ有効（別ブックには使えない）
+
 修正した完全な Python コードのみを返してください。説明は不要です。

@@ -151,12 +151,14 @@ class TestRunEvalDebugLoop:
         assert len(result.attempts) == 2
 
     @pytest.mark.asyncio
-    async def test_execution_failure_returns_immediately(self, tmp_dir, mock_client):
-        """Code crashes -> return immediately with score 0."""
+    async def test_execution_failure_retries_with_error_context(self, tmp_dir, mock_client):
+        """Code crashes -> retry loop runs (not immediate return), exhausts retries -> score 0."""
         expected = _write_xlsx(tmp_dir / "expected.xlsx", {"A": [1]})
 
         def fake_execute(code, **kwargs):
             return self._make_exec_result(False)
+
+        mock_client.generate_code.return_value = "raise Exception()"
 
         result = await run_eval_debug_loop(
             code="raise Exception()",
@@ -164,19 +166,23 @@ class TestRunEvalDebugLoop:
             expected_file_path=expected,
             openai_client=mock_client,
             sandbox_execute=fake_execute,
+            max_retries=2,
         )
 
         assert result.success is False
         assert result.final_score == 0.0
-        assert result.total_retries == 0
+        assert result.total_retries == 2
+        assert len(result.attempts) == 2
 
     @pytest.mark.asyncio
-    async def test_no_output_files(self, tmp_dir, mock_client):
-        """Code runs but produces no files -> score 0."""
+    async def test_no_output_files_retries(self, tmp_dir, mock_client):
+        """Code runs but produces no files -> retry loop runs, exhausts retries -> score 0."""
         expected = _write_xlsx(tmp_dir / "expected.xlsx", {"A": [1]})
 
         def fake_execute(code, **kwargs):
             return self._make_exec_result(True, [])
+
+        mock_client.generate_code.return_value = "print('ok')"
 
         result = await run_eval_debug_loop(
             code="print('ok')",
@@ -184,8 +190,10 @@ class TestRunEvalDebugLoop:
             expected_file_path=expected,
             openai_client=mock_client,
             sandbox_execute=fake_execute,
+            max_retries=2,
         )
 
         assert result.success is False
         assert result.final_score == 0.0
-        assert result.total_retries == 0
+        assert result.total_retries == 2
+        assert len(result.attempts) == 2

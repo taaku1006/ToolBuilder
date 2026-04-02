@@ -33,6 +33,29 @@
           "adjacent_fields": [
             {"offset_col": 4, "name": "OEE(%)", "expected": 65.8, "tolerance": 0.05}
           ]
+        },
+        {
+          "label": "総検査数",
+          "description": "品質サマリー 総検査数行の前月実績と前月比",
+          "adjacent_fields": [
+            {"offset_col": 6, "name": "前月実績", "expected": 142000, "tolerance": 0.5},
+            {"offset_col": 8, "name": "前月比矢印", "expected": "→ -1.3%", "tolerance": 0}
+          ]
+        },
+        {
+          "label": "総不良数",
+          "description": "品質サマリー 総不良数行の前月実績と前月比",
+          "adjacent_fields": [
+            {"offset_col": 6, "name": "前月実績", "expected": 1850, "tolerance": 0.5},
+            {"offset_col": 8, "name": "前月比矢印", "expected": "↓ +31.7%", "tolerance": 0}
+          ]
+        },
+        {
+          "label": "OEE平均(%)",
+          "description": "品質サマリー OEE平均行の前月比",
+          "adjacent_fields": [
+            {"offset_col": 8, "name": "前月比矢印", "expected": "↑ +6.5%", "tolerance": 0}
+          ]
         }
       ]
     },

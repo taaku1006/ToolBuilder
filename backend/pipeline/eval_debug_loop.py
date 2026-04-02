@@ -155,9 +155,11 @@ async def run_eval_debug_loop(
         expected_context = "(parse error)"
 
     current_code = code
+    best_code = code  # track code that achieved best_score
     attempts: list[EvalDebugAttempt] = []
     eval_reasoning = "(not yet evaluated)"
     best_score = 0.0
+    structured_report: str | None = None  # cell-level diffs, injected into fix prompt
 
     async def _execute(exec_code: str) -> ExecutionResult:
         return await asyncio.to_thread(
@@ -171,82 +173,72 @@ async def run_eval_debug_loop(
 
     # Initial execution
     exec_result = await _execute(current_code)
+    last_exec_error: str | None = None
+    comparison: ComparisonResult | None = None
 
     if not exec_result.success:
-        logger.info("Eval debug loop: initial execution failed (crash)")
-        return EvalDebugResult(
-            final_code=current_code,
-            final_score=0.0,
-            success=False,
-            attempts=[],
-            total_retries=0,
-        )
+        logger.info("Eval debug loop: initial execution failed (crash) — will retry with error context")
+        last_exec_error = exec_result.stderr[:800] if exec_result.stderr else "execution failed"
+    else:
+        # Find output file
+        actual_path = find_best_output_match(exec_result.output_files, expected_file_path)
+        if not actual_path:
+            logger.info("Eval debug loop: no output file found — will retry")
+            last_exec_error = "コードは実行できましたが、出力ファイルが見つかりませんでした。"
+        else:
+            # Initial mechanical comparison
+            comparison = compare_excel_files(actual_path, expected_file_path)
+            best_score = comparison.overall_score
 
-    # Find output file
-    actual_path = find_best_output_match(exec_result.output_files, expected_file_path)
-    if not actual_path:
-        logger.info("Eval debug loop: no output file found")
-        return EvalDebugResult(
-            final_code=current_code,
-            final_score=0.0,
-            success=False,
-            attempts=[],
-            total_retries=0,
-        )
-
-    # Initial mechanical comparison
-    comparison = compare_excel_files(actual_path, expected_file_path)
-    best_score = comparison.overall_score
-
-    if comparison.overall_score >= quality_threshold:
-        logger.info(
-            "Eval debug loop: initial quality sufficient",
-            extra={"score": comparison.overall_score},
-        )
-        return EvalDebugResult(
-            final_code=current_code,
-            final_score=comparison.overall_score,
-            success=True,
-            attempts=[],
-            total_retries=0,
-        )
-
-    # First iteration: get LLM evaluation for rich feedback
-    if settings is not None:
-        try:
-            from evaluation.eval_agent import evaluate_output
-
-            structured_report: str | None = None
-            if rubric:
-                try:
-                    sc_report = compare_excel_structured(actual_path, expected_file_path, rubric=rubric)
-                    structured_report = sc_report.summary_text()
-                except Exception:
-                    logger.warning("Structured comparator failed in eval debug loop", exc_info=True)
-
-            eval_result = await asyncio.to_thread(
-                evaluate_output,
-                task=task,
-                actual_path=actual_path,
-                expected_path=expected_file_path,
-                settings=settings,
-                structured_report=structured_report,
-            )
-            if eval_result is not None:
-                eval_reasoning = (
-                    f"semantic_correctness: {eval_result.semantic_correctness}/10, "
-                    f"data_integrity: {eval_result.data_integrity}/10, "
-                    f"completeness: {eval_result.completeness}/10\n"
-                    f"Reasoning: {eval_result.reasoning}"
+            if comparison.overall_score >= quality_threshold:
+                logger.info(
+                    "Eval debug loop: initial quality sufficient",
+                    extra={"score": comparison.overall_score},
                 )
-        except Exception:
-            logger.warning("Eval agent call failed in debug loop", exc_info=True)
+                return EvalDebugResult(
+                    final_code=current_code,
+                    final_score=comparison.overall_score,
+                    success=True,
+                    attempts=[],
+                    total_retries=0,
+                )
+
+            # First iteration: get LLM evaluation for rich feedback
+            if settings is not None:
+                try:
+                    from evaluation.eval_agent import evaluate_output
+
+                    if rubric:
+                        try:
+                            sc_report = compare_excel_structured(actual_path, expected_file_path, rubric=rubric)
+                            structured_report = sc_report.summary_text()
+                        except Exception:
+                            logger.warning("Structured comparator failed in eval debug loop", exc_info=True)
+
+                    eval_result = await asyncio.to_thread(
+                        evaluate_output,
+                        task=task,
+                        actual_path=actual_path,
+                        expected_path=expected_file_path,
+                        settings=settings,
+                        structured_report=structured_report,
+                    )
+                    if eval_result is not None:
+                        eval_reasoning = (
+                            f"semantic_correctness: {eval_result.semantic_correctness}/10, "
+                            f"data_integrity: {eval_result.data_integrity}/10, "
+                            f"completeness: {eval_result.completeness}/10\n"
+                            f"Reasoning: {eval_result.reasoning}"
+                        )
+                except Exception:
+                    logger.warning("Eval agent call failed in debug loop", exc_info=True)
 
     # Retry loop
-    last_exec_error: str | None = None
 
     for retry_num in range(1, max_retries + 1):
-        comparison_summary = _build_comparison_summary(comparison)
+        comparison_summary = _build_comparison_summary(comparison) if comparison is not None else "(実行失敗のため比較なし)"
+        if structured_report:
+            comparison_summary += f"\n\n【セルレベル差分（最優先で修正）】\n{structured_report}"
         if last_exec_error:
             comparison_summary = f"【直前の実行エラー】\n{last_exec_error}\n\n" + comparison_summary
 
@@ -254,7 +246,7 @@ async def run_eval_debug_loop(
             "Eval debug loop retry",
             extra={
                 "retry_num": retry_num,
-                "current_score": comparison.overall_score,
+                "current_score": comparison.overall_score if comparison is not None else 0.0,
                 "threshold": quality_threshold,
             },
         )
@@ -311,7 +303,17 @@ async def run_eval_debug_loop(
 
         comparison = compare_excel_files(actual_path, expected_file_path)
         current_code = fixed_code
-        best_score = max(best_score, comparison.overall_score)
+        if comparison.overall_score > best_score:
+            best_score = comparison.overall_score
+            best_code = fixed_code
+
+        # Refresh cell-level diffs for the next retry's fix prompt
+        if rubric:
+            try:
+                sc_report = compare_excel_structured(actual_path, expected_file_path, rubric=rubric)
+                structured_report = sc_report.summary_text()
+            except Exception:
+                logger.warning("Structured comparator failed in retry", exc_info=True)
 
         passed = comparison.overall_score >= quality_threshold
         attempt = EvalDebugAttempt(
@@ -343,7 +345,7 @@ async def run_eval_debug_loop(
         extra={"max_retries": max_retries, "best_score": best_score},
     )
     return EvalDebugResult(
-        final_code=current_code,
+        final_code=best_code,
         final_score=best_score,
         success=False,
         attempts=attempts,

@@ -46,4 +46,33 @@
    - `ws.merge_cells()` を既存の結合範囲に対して呼ばない
    - 行挿入・削除後に結合範囲が正しく更新されているか確認
 
+5. 別ブックへのシートコピーは正しく行っているか？
+   - 誤り: `new_wb['シート名'] = ws`（これは無効な代入でエラーになる）
+   - 誤り: `new_wb.copy_worksheet(ws)`（同一ブック内でのみ有効）
+   - 正しい: セルをループでコピーする関数を使うこと:
+     ```python
+     from copy import copy
+     def copy_sheet_to_workbook(src_ws, dst_wb, new_name):
+         dst_ws = dst_wb.create_sheet(new_name)
+         for row in src_ws.iter_rows():
+             for cell in row:
+                 dst_cell = dst_ws.cell(row=cell.row, column=cell.column, value=cell.value)
+                 if cell.has_style:
+                     dst_cell.font = copy(cell.font)
+                     dst_cell.fill = copy(cell.fill)
+                     dst_cell.border = copy(cell.border)
+                     dst_cell.alignment = copy(cell.alignment)
+                     dst_cell.number_format = cell.number_format
+         for merge in src_ws.merged_cells.ranges:
+             dst_ws.merge_cells(str(merge))
+         return dst_ws
+     ```
+
+【pandas ChainedAssignment エラー（よくあるバグ）】
+新しい pandas では `df[condition]['col'] = value` はエラーになります。必ず `.loc[]` を使用してください:
+- 誤り: `df[df['A'] > 0]['B'] = 1`
+- 正しい: `df.loc[df['A'] > 0, 'B'] = 1`
+- 誤り: `result = df.groupby('A').sum(); result['B'] = 1`
+- 正しい: 集計結果を直接変数に格納し、その変数を使って処理する
+
 修正した完全な Python コードのみを返してください。説明は不要です。

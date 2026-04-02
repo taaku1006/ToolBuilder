@@ -162,24 +162,6 @@ async def run_llm_eval_debug_loop(
             timeout=timeout,
         )
 
-    # Initial execution
-    exec_result = await _execute(current_code)
-
-    if not exec_result.success:
-        logger.info("LLM eval debug loop: initial execution failed")
-        return LlmEvalDebugResult(
-            final_code=current_code, final_score=0.0, success=False,
-            attempts=[], total_retries=0, final_eval=None,
-        )
-
-    actual_path = find_best_output_match(exec_result.output_files, expected_file_path)
-    if not actual_path:
-        logger.info("LLM eval debug loop: no output file found")
-        return LlmEvalDebugResult(
-            final_code=current_code, final_score=0.0, success=False,
-            attempts=[], total_retries=0, final_eval=None,
-        )
-
     # Initial LLM evaluation
     if settings is None:
         logger.warning("LLM eval debug loop: no settings, cannot call eval agent")
@@ -198,37 +180,51 @@ async def run_llm_eval_debug_loop(
             logger.warning("Structured comparator failed in LLM eval debug loop", exc_info=True)
             return None
 
-    eval_result = await asyncio.to_thread(
-        evaluate_output, task=task, actual_path=actual_path,
-        expected_path=expected_file_path, settings=settings,
-        structured_report=_structured_report(actual_path),
-    )
-
-    if eval_result is None:
-        logger.warning("LLM eval debug loop: eval agent returned None")
-        return LlmEvalDebugResult(
-            final_code=current_code, final_score=0.0, success=False,
-            attempts=[], total_retries=0, final_eval=None,
-        )
-
-    last_eval = eval_result
-    best_score = eval_result.overall
-
-    if eval_result.overall >= score_threshold:
-        logger.info("LLM eval debug loop: initial score sufficient", extra={"score": eval_result.overall})
-        return LlmEvalDebugResult(
-            final_code=current_code, final_score=eval_result.overall, success=True,
-            attempts=[], total_retries=0, final_eval=eval_result,
-        )
-
-    current_structured = _structured_report(actual_path)
+    # Initial execution
+    exec_result = await _execute(current_code)
     last_exec_error: str | None = None
+    current_structured: str | None = None
+    eval_result: EvalAgentResult | None = None
+    best_code = current_code  # track code that achieved best_score
 
-    # Retry loop
+    if not exec_result.success:
+        logger.info("LLM eval debug loop: initial execution failed — will retry with error context")
+        last_exec_error = exec_result.stderr[:800] if exec_result.stderr else "execution failed"
+    else:
+        actual_path = find_best_output_match(exec_result.output_files, expected_file_path)
+        if not actual_path:
+            logger.info("LLM eval debug loop: no output file found — will retry")
+            last_exec_error = "コードは実行できましたが、出力ファイルが見つかりませんでした。"
+        else:
+            current_structured = _structured_report(actual_path)
+            eval_result = await asyncio.to_thread(
+                evaluate_output, task=task, actual_path=actual_path,
+                expected_path=expected_file_path, settings=settings,
+                structured_report=current_structured,
+            )
+            if eval_result is None:
+                logger.warning("LLM eval debug loop: eval agent returned None")
+                last_exec_error = "LLM評価エージェントが結果を返しませんでした。"
+            else:
+                last_eval = eval_result
+                best_score = eval_result.overall
+                if eval_result.overall >= score_threshold:
+                    logger.info("LLM eval debug loop: initial score sufficient", extra={"score": eval_result.overall})
+                    return LlmEvalDebugResult(
+                        final_code=current_code, final_score=eval_result.overall, success=True,
+                        attempts=[], total_retries=0, final_eval=eval_result,
+                    )
+
+    # Retry loop — use a dummy eval_result for prompting when no eval has happened yet
+    _dummy_eval = EvalAgentResult(
+        semantic_correctness=0.0, data_integrity=0.0, completeness=0.0,
+        overall=0.0, reasoning="(初回実行が失敗したため評価未実施)",
+    ) if eval_result is None else eval_result
+
     for retry_num in range(1, max_retries + 1):
         logger.info(
             "LLM eval debug loop retry",
-            extra={"retry_num": retry_num, "current_score": eval_result.overall},
+            extra={"retry_num": retry_num, "current_score": eval_result.overall if eval_result else 0.0},
         )
 
         structured_with_error = current_structured or ""
@@ -240,7 +236,7 @@ async def run_llm_eval_debug_loop(
             task=task,
             code=current_code,
             expected_context=expected_context,
-            eval_result=eval_result,
+            eval_result=eval_result if eval_result is not None else _dummy_eval,
             file_context=file_context or "",
             settings=settings,
             structured_comparison=structured_with_error or None,
@@ -298,7 +294,9 @@ async def run_llm_eval_debug_loop(
 
         current_code = fixed_code
         last_eval = eval_result
-        best_score = max(best_score, eval_result.overall)
+        if eval_result.overall > best_score:
+            best_score = eval_result.overall
+            best_code = fixed_code
         passed = eval_result.overall >= score_threshold
 
         attempt = LlmEvalDebugAttempt(
@@ -320,9 +318,9 @@ async def run_llm_eval_debug_loop(
                 attempts=attempts, total_retries=retry_num, final_eval=eval_result,
             )
 
-    # All retries exhausted
+    # All retries exhausted — return best code (not necessarily last code)
     logger.warning("LLM eval debug loop exhausted", extra={"best_score": best_score})
     return LlmEvalDebugResult(
-        final_code=current_code, final_score=best_score, success=False,
+        final_code=best_code, final_score=best_score, success=False,
         attempts=attempts, total_retries=max_retries, final_eval=last_eval,
     )

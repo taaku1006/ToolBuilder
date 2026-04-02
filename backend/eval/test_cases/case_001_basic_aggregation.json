@@ -1,6 +1,0 @@
-{
-  "id": "case_001",
-  "task": "Excelファイルの売上データを商品別に集計して、合計金額の降順で並べてください",
-  "description": "Basic aggregation: group by product, sum amounts, sort descending",
-  "expected_success": true
-}

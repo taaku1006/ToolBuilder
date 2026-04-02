@@ -1,0 +1,1 @@
+{"id":"v11_gpt5_no_a","pipeline":{"explore":false,"reflect":true,"decompose":true,"debug_retry_limit":3,"eval_debug":true,"llm_eval_debug":true,"eval_retry_strategy":"replan","eval_retry_max_loops":2,"subtask_debug_retries":2,"eval_quality_threshold":0.95},"model":"gpt-5.4","description":"gpt-5.4 + planner/replan, no Phase A (explore)"}

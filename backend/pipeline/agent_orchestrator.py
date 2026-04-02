@@ -202,7 +202,7 @@ async def orchestrate(
     eval_debug_retries = 0
     eval_final_score: float | None = None
 
-    if settings.eval_debug_loop_enabled and expected_file_path and Path(expected_file_path).exists() and exec_succeeded:
+    if settings.eval_debug_loop_enabled and expected_file_path and Path(expected_file_path).exists():
         trace.start_phase("F")
         yield AgentLogEntry(phase="F", action="start", content="Phase F: 評価駆動デバッグループを開始します", timestamp=_now_iso())
         tok_before = _tok()
@@ -220,8 +220,9 @@ async def orchestrate(
         phase_tokens["F"] = _tok() - tok_before
         eval_debug_retries = eval_debug_result.total_retries
         eval_final_score = eval_debug_result.final_score
+        # Always use Phase F's best code (not Phase D's), even when threshold not met
+        python_code = eval_debug_result.final_code
         if eval_debug_result.success:
-            python_code = eval_debug_result.final_code
             trace.end_phase("F", output=f"score={eval_debug_result.final_score:.2%} ({eval_debug_result.total_retries}回リトライ)")
             yield AgentLogEntry(phase="F", action="complete", content=f"品質スコア {eval_debug_result.final_score:.2%} で合格 ({eval_debug_result.total_retries}回リトライ)", timestamp=_now_iso())
         else:
@@ -236,7 +237,7 @@ async def orchestrate(
     llm_eval_retries = 0
     llm_eval_final_score: float | None = None
 
-    if settings.llm_eval_loop_enabled and expected_file_path and Path(expected_file_path).exists() and exec_succeeded:
+    if settings.llm_eval_loop_enabled and expected_file_path and Path(expected_file_path).exists():
         trace.start_phase("G")
         yield AgentLogEntry(phase="G", action="start", content="Phase G: LLM評価デバッグループを開始します", timestamp=_now_iso())
         tok_before = _tok()
