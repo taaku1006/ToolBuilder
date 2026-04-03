@@ -1,0 +1,16 @@
+{
+  "id": "v_magentic_one_pkg",
+  "architecture_type": "magentic_one_pkg",
+  "model": "gpt-4o",
+  "temperature": 0.2,
+  "description": "MagenticOne via autogen-agentchat package. Coder + ComputerTerminal only (no WebSurfer, no FileSurfer).",
+  "pipeline": {
+    "explore": false,
+    "reflect": false,
+    "decompose": false,
+    "debug_retry_limit": 0,
+    "eval_debug": false,
+    "llm_eval_debug": false,
+    "skills": false
+  }
+}

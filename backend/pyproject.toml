@@ -16,6 +16,10 @@ dependencies = [
     "aiosqlite>=0.21",
     "python-dotenv>=1.0",
     "langfuse>=2.0,<3.0",
+    "autogen-agentchat>=0.7.5",
+    "autogen-ext[openai]>=0.7.5",
+    "tiktoken>=0.8.0",
+    "aiofiles>=24.0",
 ]
 
 [dependency-groups]

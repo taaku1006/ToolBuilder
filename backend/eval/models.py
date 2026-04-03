@@ -48,6 +48,7 @@ class ArchitectureConfig:
     """Defines an agent architecture variant for evaluation."""
 
     id: str
+    architecture_type: str = "toolbuilder"  # "toolbuilder" | "magentic_one_pkg" | "magentic_one_embed"
     phases: list[str] = field(default_factory=lambda: ["A", "B", "P", "C", "D", "F", "G", "E"])
     pipeline: PipelineConfig | None = None
     model: str = "gpt-4o"
@@ -152,6 +153,7 @@ class EvalResult:
     generated_code: str | None = None
     error: str | None = None
     output_files: list[str] = field(default_factory=list)
+    agent_log_full: list[dict] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         """Serialize to a plain dict (JSON-safe)."""
@@ -197,6 +199,7 @@ def load_architecture(path: Path) -> ArchitectureConfig:
 
     return ArchitectureConfig(
         id=data["id"],
+        architecture_type=data.get("architecture_type", "toolbuilder"),
         phases=data.get("phases", ["A", "B", "P", "C", "D", "F", "G", "E"]),
         pipeline=pipeline,
         model=data.get("model", "gpt-4o"),

@@ -386,3 +386,113 @@ class TestExecuteCodeErrors:
 
         with pytest.raises(Exception):
             result.stdout = "hacked"  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------------------
+# Unit tests: execute_code_block — language-aware execution
+# ---------------------------------------------------------------------------
+
+
+class TestExecuteCodeBlock:
+    """Tests for execute_code_block() which supports python and sh."""
+
+    def test_python_block_executes(self, tmp_path: Path) -> None:
+        """Python code block should execute and return stdout."""
+        from infra.sandbox import execute_code_block
+
+        result = execute_code_block(
+            code="print('hello from python')",
+            language="python",
+            output_dir=str(tmp_path / "outputs"),
+        )
+        assert result.success is True
+        assert "hello from python" in result.stdout
+
+    def test_sh_block_executes(self, tmp_path: Path) -> None:
+        """Shell code block should execute via sh."""
+        from infra.sandbox import execute_code_block
+
+        result = execute_code_block(
+            code="echo 'hello from sh'",
+            language="sh",
+            output_dir=str(tmp_path / "outputs"),
+        )
+        assert result.success is True
+        assert "hello from sh" in result.stdout
+
+    def test_sh_block_error_returns_failure(self, tmp_path: Path) -> None:
+        """Shell block with a failing command returns success=False."""
+        from infra.sandbox import execute_code_block
+
+        result = execute_code_block(
+            code="exit 1",
+            language="sh",
+            output_dir=str(tmp_path / "outputs"),
+        )
+        assert result.success is False
+
+    def test_python_block_has_sandbox_env(self, tmp_path: Path) -> None:
+        """Python block should have OUTPUT_DIR env var (same sandbox as execute_code)."""
+        from infra.sandbox import execute_code_block
+
+        code = textwrap.dedent("""\
+            import os
+            print(os.environ.get('OUTPUT_DIR', 'NOT_SET'))
+        """)
+        result = execute_code_block(
+            code=code,
+            language="python",
+            output_dir=str(tmp_path / "outputs"),
+        )
+        assert result.success is True
+        assert "NOT_SET" not in result.stdout
+
+    def test_sh_block_has_sandbox_env(self, tmp_path: Path) -> None:
+        """Shell block should also have OUTPUT_DIR env var."""
+        from infra.sandbox import execute_code_block
+
+        result = execute_code_block(
+            code="echo $OUTPUT_DIR",
+            language="sh",
+            output_dir=str(tmp_path / "outputs"),
+        )
+        assert result.success is True
+        assert result.stdout.strip() != ""
+
+    def test_sh_block_no_api_key_leak(self, tmp_path: Path, monkeypatch) -> None:
+        """Shell block must not leak OPENAI_API_KEY."""
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-secret")
+
+        from infra.sandbox import execute_code_block
+
+        result = execute_code_block(
+            code="echo $OPENAI_API_KEY",
+            language="sh",
+            output_dir=str(tmp_path / "outputs"),
+        )
+        assert "sk-secret" not in result.stdout
+
+    def test_sh_block_collects_output_files(self, tmp_path: Path) -> None:
+        """Shell block that creates files should have them in output_files."""
+        from infra.sandbox import execute_code_block
+
+        result = execute_code_block(
+            code="echo 'data' > $OUTPUT_DIR/result.csv",
+            language="sh",
+            output_dir=str(tmp_path / "outputs"),
+        )
+        assert result.success is True
+        assert any("result.csv" in f for f in result.output_files)
+
+    def test_timeout_applies_to_sh(self, tmp_path: Path) -> None:
+        """Shell block timeout should work the same as python."""
+        from infra.sandbox import execute_code_block
+
+        result = execute_code_block(
+            code="sleep 10",
+            language="sh",
+            output_dir=str(tmp_path / "outputs"),
+            timeout=1,
+        )
+        assert result.success is False
+        assert "timed out" in result.stderr.lower()

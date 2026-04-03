@@ -62,12 +62,15 @@ def _stdout_has_error(stdout: str) -> bool:
     return any(pat in stdout for pat in _ERROR_PATTERNS)
 
 
+_SCRIPT_FILENAMES = {"script.py", "script.sh"}
+
+
 def _collect_output_files(exec_dir: Path) -> list[str]:
-    """Return file names (not script.py itself) written to exec_dir."""
+    """Return file names (not the script itself) written to exec_dir."""
     return [
         str(p)
         for p in exec_dir.iterdir()
-        if p.is_file() and p.name != "script.py"
+        if p.is_file() and p.name not in _SCRIPT_FILENAMES
     ]
 
 
@@ -156,6 +159,110 @@ def execute_code(
             "Sandbox execution failed",
             extra={"exec_id": exec_id, "success": False, "elapsed_ms": elapsed_ms, "stderr_preview": stderr[:200]},
         )
+
+    return ExecutionResult(
+        stdout=stdout,
+        stderr=stderr,
+        elapsed_ms=elapsed_ms,
+        output_files=output_files,
+        success=success,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Language-aware code block execution
+# ---------------------------------------------------------------------------
+
+_LANG_TO_CMD: dict[str, tuple[str, str]] = {
+    "python": ("script.py", "python"),
+    "sh": ("script.sh", "sh"),
+}
+
+
+def execute_code_block(
+    code: str,
+    language: str = "python",
+    file_id: str | None = None,
+    upload_dir: str = "./uploads",
+    output_dir: str = "./outputs",
+    timeout: int = 30,
+) -> ExecutionResult:
+    """Execute a single code block with the specified language interpreter.
+
+    Mirrors autogen's LocalCommandLineCodeExecutor._execute_code_dont_check_setup():
+      - Each block is written to a separate file (script.py or script.sh)
+      - Executed with the appropriate interpreter (python or sh)
+      - Same sandboxed environment as execute_code() (PATH, OUTPUT_DIR, INPUT_FILE only)
+
+    Args:
+        code: Source code to execute.
+        language: Language of the code block ("python" or "sh").
+        file_id: Optional upload file ID to find in upload_dir.
+        upload_dir: Directory containing uploaded files.
+        output_dir: Parent directory for execution temp dirs.
+        timeout: Maximum execution time in seconds.
+
+    Returns:
+        Frozen ExecutionResult.
+    """
+    lang_key = language.lower()
+    if lang_key not in _LANG_TO_CMD:
+        return ExecutionResult(
+            stdout="",
+            stderr=f"Unsupported language: {language}",
+            elapsed_ms=0,
+            output_files=[],
+            success=False,
+        )
+
+    script_name, cmd = _LANG_TO_CMD[lang_key]
+
+    exec_id = str(uuid.uuid4())
+    exec_dir = Path(output_dir) / exec_id
+    exec_dir.mkdir(parents=True, exist_ok=True)
+
+    script_path = exec_dir / script_name
+    script_path.write_text(code, encoding="utf-8")
+
+    env = _build_env(exec_dir, file_id, upload_dir)
+
+    logger.info(
+        "Sandbox block execution started",
+        extra={"exec_id": exec_id, "language": lang_key, "timeout": timeout},
+    )
+
+    start = time.monotonic()
+    try:
+        proc = subprocess.run(
+            [cmd, script_name],
+            cwd=str(exec_dir),
+            env=env,
+            timeout=timeout,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        elapsed_ms = int((time.monotonic() - start) * 1000)
+        stdout = proc.stdout
+        stderr = proc.stderr
+        success = proc.returncode == 0
+        if success and lang_key == "python" and _stdout_has_error(stdout):
+            success = False
+    except subprocess.TimeoutExpired:
+        elapsed_ms = int((time.monotonic() - start) * 1000)
+        logger.warning(
+            "Sandbox block execution timed out",
+            extra={"exec_id": exec_id, "elapsed_ms": elapsed_ms, "timeout": timeout},
+        )
+        return ExecutionResult(
+            stdout="",
+            stderr="Execution timed out",
+            elapsed_ms=elapsed_ms,
+            output_files=[],
+            success=False,
+        )
+
+    output_files = _collect_output_files(exec_dir)
 
     return ExecutionResult(
         stdout=stdout,

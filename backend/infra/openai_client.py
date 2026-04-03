@@ -50,6 +50,46 @@ class OpenAIClient:
         self.completion_tokens: int = 0
         self.api_calls: int = 0
 
+    def chat(self, messages: list[dict]) -> str:
+        """Multi-turn chat with arbitrary message history.
+
+        Args:
+            messages: List of dicts with "role" and "content" keys, following
+                      the OpenAI messages format directly.
+
+        Returns:
+            The assistant's reply content (raw, no code-fence stripping).
+        """
+        start = time.monotonic()
+        try:
+            response = self._client.chat.completions.create(
+                model=self._model,
+                messages=messages,
+                temperature=0.2,
+            )
+        except Exception:
+            duration_ms = int((time.monotonic() - start) * 1000)
+            logger.exception(
+                "OpenAI API call (chat) failed",
+                extra={"model": self._model, "duration_ms": duration_ms},
+            )
+            raise
+
+        duration_ms = int((time.monotonic() - start) * 1000)
+        usage = response.usage
+        extra: dict[str, object] = {"model": self._model, "duration_ms": duration_ms}
+        self.api_calls += 1
+        if usage is not None:
+            extra["prompt_tokens"] = usage.prompt_tokens
+            extra["completion_tokens"] = usage.completion_tokens
+            extra["total_tokens"] = usage.total_tokens
+            self.total_tokens += usage.total_tokens
+            self.prompt_tokens += usage.prompt_tokens
+            self.completion_tokens += usage.completion_tokens
+
+        logger.info("OpenAI API call (chat) completed", extra=extra)
+        return response.choices[0].message.content or ""
+
     def generate_code(self, system_prompt: str, user_prompt: str) -> str:
         logger.info(
             "OpenAI API call started",

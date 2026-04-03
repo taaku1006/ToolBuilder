@@ -96,6 +96,7 @@ class EvalRunner:
         settings = self._settings_factory(overrides)
 
         agent_log: list[dict] = []
+        agent_log_full: list[dict] = []  # untruncated log for debugging
         generated_code: str | None = None
         error: str | None = None
         retry_count = 0
@@ -107,6 +108,7 @@ class EvalRunner:
         phase_durations: dict[str, int] = {}
         phase_tokens: dict[str, int] = {}
         decomp_output_files: list[str] = []
+        m1_output_files: list[str] = []
 
         start_ms = time.monotonic_ns() // 1_000_000
 
@@ -132,14 +134,37 @@ class EvalRunner:
             )
 
         try:
-            async for entry in orchestrate(
-                task=case.task,
-                file_id=file_id,
-                settings=settings,
-                expected_file_path=case.expected_file_path,
-                cancel_check=self._cancel_check,
-                rubric=case.rubric,
-            ):
+            arch_type = arch.architecture_type
+
+            if arch_type == "magentic_one_pkg":
+                from pipeline.magentic_one import run_magentic_one_pkg
+                _stream = run_magentic_one_pkg(
+                    task=case.task,
+                    file_id=file_id,
+                    settings=settings,
+                    expected_file_path=case.expected_file_path,
+                    cancel_check=self._cancel_check,
+                )
+            elif arch_type == "magentic_one_embed":
+                from pipeline.magentic_one import run_magentic_one_embedded
+                _stream = run_magentic_one_embedded(
+                    task=case.task,
+                    file_id=file_id,
+                    settings=settings,
+                    expected_file_path=case.expected_file_path,
+                    cancel_check=self._cancel_check,
+                )
+            else:
+                _stream = orchestrate(
+                    task=case.task,
+                    file_id=file_id,
+                    settings=settings,
+                    expected_file_path=case.expected_file_path,
+                    cancel_check=self._cancel_check,
+                    rubric=case.rubric,
+                )
+
+            async for entry in _stream:
                 # Keep full content for internal processing; truncate for log storage
                 full_content = entry.content
                 log_entry = {
@@ -149,6 +174,13 @@ class EvalRunner:
                     "timestamp": entry.timestamp,
                 }
                 agent_log.append(log_entry)
+                # Full log for debugging (no truncation)
+                agent_log_full.append({
+                    "phase": entry.phase,
+                    "action": entry.action,
+                    "content": full_content,
+                    "timestamp": entry.timestamp,
+                })
 
                 # Track phase durations
                 if entry.action == "start":
@@ -181,6 +213,7 @@ class EvalRunner:
                         completion_tokens = payload.get("completion_tokens", 0)
                         api_calls = payload.get("api_calls", 0)
                         phase_tokens = payload.get("phase_tokens", {})
+                        m1_output_files = payload.get("m1_output_files", [])
                     except (json.JSONDecodeError, TypeError):
                         pass
 
@@ -213,6 +246,8 @@ class EvalRunner:
                     output_files_for_compare = [
                         f for f in decomp_output_files if Path(f).exists()
                     ]
+                elif m1_output_files:
+                    output_files_for_compare = [f for f in m1_output_files if Path(f).exists()]
                 elif generated_code:
                     # Standard path: re-execute code to get output files
                     exec_result = await asyncio.to_thread(
@@ -311,6 +346,7 @@ class EvalRunner:
             generated_code=generated_code,
             error=error,
             output_files=output_files_for_compare if output_files_for_compare else [],
+            agent_log_full=agent_log_full,
         )
 
     async def run_all(self) -> list[EvalResult]:
@@ -346,6 +382,14 @@ class EvalRunner:
                 json.dumps(result.to_dict(), ensure_ascii=False, indent=2),
                 encoding="utf-8",
             )
+
+            # Save full (untruncated) agent log for debugging
+            if result.agent_log_full:
+                full_log_path = output_dir / f"{result.architecture_id}_{result.test_case_id}_full_log.json"
+                full_log_path.write_text(
+                    json.dumps(result.agent_log_full, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
 
         summary = {
             "results": [r.to_dict() for r in results],
