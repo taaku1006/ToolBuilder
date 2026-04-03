@@ -55,6 +55,25 @@ export const PHASE_DEFINITIONS: Record<string, PhaseDefinition> = {
 /** Canonical display order for phases */
 export const PHASE_ORDER = ['A', 'B', 'P', 'C', 'D', 'F', 'G', 'E'] as const
 
+/** MagenticOne phase definitions */
+export const MAGENTIC_ONE_PHASE_DEFINITIONS: Record<string, PhaseDefinition> = {
+  M1E_Orchestrator: {
+    label: 'Orchestrator',
+    color: 'bg-amber-900 text-amber-300',
+    description: 'Task/Progress Ledger',
+  },
+  M1E_Coder: {
+    label: 'Coder',
+    color: 'bg-green-900 text-green-300',
+    description: 'コード生成',
+  },
+  M1E_Terminal: {
+    label: 'Terminal',
+    color: 'bg-cyan-900 text-cyan-300',
+    description: 'コード実行',
+  },
+}
+
 /** Short labels for AgentLog display */
 export const PHASE_LABELS: Record<string, string> = {
   A: '探索',
@@ -65,4 +84,7 @@ export const PHASE_LABELS: Record<string, string> = {
   F: '機械評価デバッグ',
   G: 'LLM評価デバッグ',
   E: 'Skills保存',
+  M1E_Orchestrator: 'Orchestrator',
+  M1E_Coder: 'Coder',
+  M1E_Terminal: 'Terminal',
 }

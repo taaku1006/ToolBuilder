@@ -13,6 +13,7 @@ export interface PipelineConfig {
 
 export interface Architecture {
   id: string
+  architecture_type: string
   phases: string[]
   model: string
   debug_retry_limit: number

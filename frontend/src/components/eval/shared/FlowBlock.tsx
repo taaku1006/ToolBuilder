@@ -1,4 +1,4 @@
-import { PHASE_DEFINITIONS } from '../../../constants/phases'
+import { PHASE_DEFINITIONS, MAGENTIC_ONE_PHASE_DEFINITIONS } from '../../../constants/phases'
 
 interface FlowBlockProps {
   label: string
@@ -8,7 +8,9 @@ interface FlowBlockProps {
 }
 
 export function FlowBlock({ label, phase, active, children }: FlowBlockProps) {
-  const info = phase ? PHASE_DEFINITIONS[phase] : null
+  const info = phase
+    ? (PHASE_DEFINITIONS[phase] ?? MAGENTIC_ONE_PHASE_DEFINITIONS[phase] ?? null)
+    : null
   return (
     <div
       className={`border rounded-lg px-3 py-2 text-xs ${

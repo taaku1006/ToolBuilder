@@ -8,27 +8,85 @@ interface ArchDetailPanelProps {
   arch: Architecture
 }
 
-export function ArchDetailPanel({ arch }: ArchDetailPanelProps) {
-  const p = arch.pipeline
+function MagenticOneFlow({ arch }: { arch: Architecture }) {
+  const cfg = arch.pipeline as Record<string, unknown> | null
+  const maxOuterLoops = (cfg?.max_outer_loops as number) ?? 5
+  const maxTurns = (cfg?.max_turns as number) ?? 20
+  const maxStalls = (cfg?.max_stalls as number) ?? 3
 
-  if (!p) {
-    const legacyPhases = arch.phases?.length ? arch.phases : [...PHASE_ORDER]
-    return (
-      <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-2">
-        <div className="font-mono text-sm text-white">{arch.id}</div>
-        <div className="text-xs text-gray-500">{arch.description}</div>
-        <div className="flex items-center gap-1">
-          {legacyPhases.map((ph, i) => (
-            <div key={ph} className="flex items-center">
-              {i > 0 && <span className="mx-1 text-xs text-gray-600">→</span>}
-              <PhaseTag phase={ph} />
-            </div>
-          ))}
-        </div>
+  return (
+    <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <span className="font-mono text-sm text-white">{arch.id}</span>
+        <span className="text-xs text-gray-500">{arch.model}</span>
       </div>
-    )
-  }
+      {arch.description && <div className="text-xs text-gray-400">{arch.description}</div>}
 
+      <div className="flex flex-col items-start gap-0">
+        {/* Outer loop container */}
+        <div className="border border-dashed border-amber-700/50 rounded-lg p-3 w-full relative">
+          <div className="text-[10px] text-amber-400 font-mono absolute -top-2 left-2 bg-gray-800 px-1">
+            Outer Loop (Task Ledger) x{maxOuterLoops}
+          </div>
+
+          <div className="flex flex-col items-start gap-0 mt-1">
+            <FlowBlock label="Orchestrator" phase="M1E_Orchestrator" active>
+              <span>事実収集 + 計画立案</span>
+            </FlowBlock>
+
+            <FlowArrow />
+
+            {/* Inner loop container */}
+            <div className="border border-dashed border-cyan-700/50 rounded-lg p-3 w-full relative">
+              <div className="text-[10px] text-cyan-400 font-mono absolute -top-2 left-2 bg-gray-800 px-1">
+                Inner Loop (Progress Ledger) x{maxTurns}
+              </div>
+
+              <div className="flex flex-col items-start gap-0 mt-1">
+                <FlowBlock label="Progress Ledger" phase="M1E_Orchestrator" active>
+                  <span>進捗評価 + 次のエージェント選択</span>
+                </FlowBlock>
+
+                <FlowArrow />
+
+                <div className="flex items-center gap-2">
+                  <FlowBlock label="Coder" phase="M1E_Coder" active>
+                    <span>コード生成</span>
+                  </FlowBlock>
+                  <span className="text-gray-500 text-xs">or</span>
+                  <FlowBlock label="Terminal" phase="M1E_Terminal" active>
+                    <span>コード実行</span>
+                  </FlowBlock>
+                </div>
+
+                <div className="flex items-center gap-1 mt-1">
+                  <span className="text-cyan-500 text-[10px]">
+                    ↺ stall {maxStalls}回で外ループへ
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1 mt-2">
+            <span className="text-amber-500 text-[10px]">
+              ↺ stall時: Task Ledger 更新 → 再計画
+            </span>
+          </div>
+        </div>
+
+        <FlowArrow />
+
+        <FlowBlock label="Final Answer" phase="M1E_Orchestrator" active>
+          <span>最終回答生成</span>
+        </FlowBlock>
+      </div>
+    </div>
+  )
+}
+
+function StandardPipelineFlow({ arch }: { arch: Architecture }) {
+  const p = arch.pipeline!
   const pipelineExt = p as unknown as Record<string, unknown>
 
   return (
@@ -138,4 +196,36 @@ export function ArchDetailPanel({ arch }: ArchDetailPanelProps) {
       </div>
     </div>
   )
+}
+
+export function ArchDetailPanel({ arch }: ArchDetailPanelProps) {
+  const p = arch.pipeline
+
+  if (!p) {
+    const legacyPhases = arch.phases?.length ? arch.phases : [...PHASE_ORDER]
+    return (
+      <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-2">
+        <div className="font-mono text-sm text-white">{arch.id}</div>
+        <div className="text-xs text-gray-500">{arch.description}</div>
+        <div className="flex items-center gap-1">
+          {legacyPhases.map((ph, i) => (
+            <div key={ph} className="flex items-center">
+              {i > 0 && <span className="mx-1 text-xs text-gray-600">→</span>}
+              <PhaseTag phase={ph} />
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  const isMagenticOne =
+    arch.architecture_type === 'magentic_one_embed' ||
+    arch.architecture_type === 'magentic_one_pkg'
+
+  if (isMagenticOne) {
+    return <MagenticOneFlow arch={arch} />
+  }
+
+  return <StandardPipelineFlow arch={arch} />
 }
