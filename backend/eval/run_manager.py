@@ -7,6 +7,7 @@ remains a thin HTTP handler.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from pathlib import Path
@@ -40,6 +41,7 @@ class EvalRunManager:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
         self._run_status: dict[str, dict] = {}
+        self._change_events: dict[str, asyncio.Event] = {}
 
     # ------------------------------------------------------------------
     # Architecture / test-case loading
@@ -92,6 +94,29 @@ class EvalRunManager:
         self._run_status[run_id] = entry
         return entry
 
+    def _notify(self, run_id: str) -> None:
+        """Signal all SSE waiters that *run_id* status has changed."""
+        event = self._change_events.get(run_id)
+        if event is not None:
+            event.set()
+
+    async def wait_for_change(self, run_id: str, timeout: float = 5.0) -> bool:
+        """Block until *run_id* status changes or *timeout* elapses.
+
+        Returns ``True`` if a change was signalled, ``False`` on timeout.
+        The event is automatically reset after waking so subsequent calls
+        will wait for the *next* change.
+        """
+        if run_id not in self._change_events:
+            self._change_events[run_id] = asyncio.Event()
+        event = self._change_events[run_id]
+        event.clear()
+        try:
+            await asyncio.wait_for(event.wait(), timeout=timeout)
+            return True
+        except asyncio.TimeoutError:
+            return False
+
     def get_status(self, run_id: str) -> dict | None:
         """Return the current status dict for *run_id*, or ``None`` if unknown."""
         return self._run_status.get(run_id)
@@ -109,6 +134,7 @@ class EvalRunManager:
         if entry is None:
             return False
         entry["cancel_requested"] = True
+        self._notify(run_id)
         return True
 
     def update_progress(self, *, run_id: str, progress: int) -> None:
@@ -116,6 +142,7 @@ class EvalRunManager:
         entry = self._run_status.get(run_id)
         if entry is not None:
             entry["progress"] = progress
+            self._notify(run_id)
 
     def complete_run(self, *, run_id: str, report: dict | None) -> None:
         """Mark a run as completed and attach its report."""
@@ -123,6 +150,7 @@ class EvalRunManager:
         if entry is not None:
             entry["status"] = "completed"
             entry["report"] = report
+            self._notify(run_id)
 
     def fail_run(self, *, run_id: str, error: str) -> None:
         """Mark a run as failed with an error message."""
@@ -130,12 +158,14 @@ class EvalRunManager:
         if entry is not None:
             entry["status"] = "failed"
             entry["report"] = {"error": error}
+            self._notify(run_id)
 
     def mark_stopped(self, *, run_id: str) -> None:
         """Mark a run as stopped (cancelled mid-run)."""
         entry = self._run_status.get(run_id)
         if entry is not None:
             entry["status"] = "stopped"
+            self._notify(run_id)
 
     # ------------------------------------------------------------------
     # Settings factory

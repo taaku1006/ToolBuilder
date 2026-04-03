@@ -14,6 +14,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Form, HTTPException, UploadFile
 from fastapi import File as FastAPIFile
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from core.config import Settings
@@ -46,6 +47,7 @@ _manager = EvalRunManager(settings=get_settings())
 
 class ArchitectureOut(BaseModel):
     id: str
+    architecture_type: str = "toolbuilder"
     phases: list[str]
     model: str
     debug_retry_limit: int
@@ -87,6 +89,7 @@ async def list_architectures() -> list[ArchitectureOut]:
     return [
         ArchitectureOut(
             id=a.id,
+            architecture_type=a.architecture_type,
             phases=a.phases,
             model=a.model,
             debug_retry_limit=a.debug_retry_limit,
@@ -253,6 +256,53 @@ async def get_eval_status(run_id: str) -> RunStatusOut:
         progress=s["progress"],
         total=s["total"],
         report=s["report"],
+    )
+
+
+@router.get("/eval/run/{run_id}/stream")
+async def stream_eval_status(run_id: str) -> StreamingResponse:
+    """Stream eval run status changes via Server-Sent Events."""
+
+    async def _event_stream() -> ...:  # type: ignore[override]
+        prev_progress = -1
+        prev_status = ""
+
+        while True:
+            s = _manager.get_status(run_id)
+            if s is None:
+                yield f"data: {json.dumps({'run_id': run_id, 'status': 'not_found', 'progress': 0, 'total': 0, 'report': None})}\n\n"
+                return
+
+            status = s["status"]
+            progress = s["progress"]
+
+            # Only emit when something changed
+            if status != prev_status or progress != prev_progress:
+                payload = {
+                    "run_id": run_id,
+                    "status": status,
+                    "progress": progress,
+                    "total": s["total"],
+                    "report": s["report"],
+                }
+                yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+                prev_status = status
+                prev_progress = progress
+
+            # Terminal states: send final event and close
+            if status in ("completed", "failed", "stopped"):
+                return
+
+            # Wait for next change (with timeout fallback)
+            await _manager.wait_for_change(run_id, timeout=5.0)
+
+    return StreamingResponse(
+        _event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 
