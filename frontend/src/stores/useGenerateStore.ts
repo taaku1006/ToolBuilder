@@ -149,9 +149,6 @@ export const useGenerateStore = create<GenerateState>((set, get) => ({
               }
             } else if (parsed.phase === 'L' && parsed.action === 'complete') {
               // Learn phase complete — no action needed, logged for SSE display
-              try {
-                // Skill save failure is non-critical
-              }
               set((state) => ({ agentLog: [...state.agentLog, parsed] }))
             } else if (parsed.action === 'error') {
               set((state) => ({ agentLog: [...state.agentLog, parsed] }))
