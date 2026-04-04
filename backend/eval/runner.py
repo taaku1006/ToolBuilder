@@ -163,6 +163,7 @@ class EvalRunner:
                     expected_file_path=case.expected_file_path,
                     cancel_check=self._cancel_check,
                     rubric=case.rubric,
+                    v2_config=arch.v2_config,
                 )
 
             async for entry in _stream:

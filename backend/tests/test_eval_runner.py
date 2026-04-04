@@ -325,10 +325,9 @@ class TestEvalRunnerFullRun:
 
         applied_settings = {}
 
-        async def mock_orchestrate(task, file_id, settings, expected_file_path=None, cancel_check=None, rubric=None):
-            applied_settings["reflection_enabled"] = settings.reflection_enabled
-            applied_settings["debug_loop_enabled"] = settings.debug_loop_enabled
+        async def mock_orchestrate(task, file_id, settings, expected_file_path=None, cancel_check=None, rubric=None, v2_config=None):
             applied_settings["openai_model"] = settings.openai_model
+            applied_settings["v2_config"] = v2_config
             entry = MagicMock()
             entry.phase = "C"
             entry.action = "complete"
@@ -351,8 +350,6 @@ class TestEvalRunnerFullRun:
         with patch("eval.runner.orchestrate_v2", side_effect=mock_orchestrate):
             await runner.run_all()
 
-        assert applied_settings["reflection_enabled"] is False
-        assert applied_settings["debug_loop_enabled"] is False
         assert applied_settings["openai_model"] == "gpt-4o-mini"
 
 

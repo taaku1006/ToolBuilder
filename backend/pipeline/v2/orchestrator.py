@@ -33,14 +33,22 @@ async def orchestrate_v2(
     expected_file_path: str | None = None,
     cancel_check: Callable | None = None,
     rubric: dict | None = None,
+    v2_config: dict | None = None,
 ) -> AsyncGenerator[AgentLogEntry, None]:
     """Main v2 pipeline entry point.
 
     Signature matches agent_orchestrator.orchestrate() for eval runner
-    compatibility.
+    compatibility. v2_config is passed from ArchitectureConfig.v2_config
+    by the eval runner.
     """
     # Load v2-specific settings from architecture config if available
-    v2_settings = V2Settings()
+    v2_settings = V2Settings.from_dict(v2_config) if v2_config else V2Settings()
+
+    # Apply stage model overrides to STAGE_CONFIGS so all stages pick them up
+    from pipeline.v2.config import STAGE_CONFIGS
+    for stage, model in v2_settings.stage_models.items():
+        if stage in STAGE_CONFIGS:
+            STAGE_CONFIGS[stage]["model"] = model
 
     openai_client = OpenAIClient(settings)
 
@@ -72,8 +80,11 @@ async def orchestrate_v2(
         from pipeline.v2.models import FileContext
         file_context = FileContext()
 
-    # 1b. Memory recall (LLM-free)
-    memory_context = _recall_memory(file_context)
+    # 1b. Memory recall (LLM-free, skipped when memory_enabled=False)
+    if v2_settings.memory_enabled:
+        memory_context = _recall_memory(file_context)
+    else:
+        memory_context = MemoryContext()
     strategizer = StrategyPhase(openai_client, settings)
     classification, strategy = await strategizer.plan(task, file_context, memory_context)
 
@@ -169,7 +180,8 @@ async def orchestrate_v2(
 
     # ── Stage 4: LEARN ──
     tracker.transition("learn")
-    LearnPhase(_memory_data_dir()).learn(state)
+    if v2_settings.memory_enabled:
+        LearnPhase(_memory_data_dir()).learn(state)
     yield AgentLogEntry(
         phase="L", action="complete",
         content="学習完了",

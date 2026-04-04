@@ -74,3 +74,10 @@ class V2Settings:
             if key in data:
                 kwargs[key] = data[key]
         return cls(**kwargs)
+
+    def get_stage_config(self, stage: str) -> dict:
+        """Return merged config for a stage: model from stage_models, rest from STAGE_CONFIGS."""
+        base = dict(STAGE_CONFIGS.get(stage, {}))
+        if stage in self.stage_models:
+            base["model"] = self.stage_models[stage]
+        return base
