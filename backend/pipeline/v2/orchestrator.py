@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import AsyncGenerator, Callable
+from pathlib import Path
 
 from core.config import Settings
 from infra.openai_client import OpenAIClient
@@ -71,8 +72,8 @@ async def orchestrate_v2(
         from pipeline.v2.models import FileContext
         file_context = FileContext()
 
-    # 1b. Strategy (single LLM call)
-    memory_context = MemoryContext()  # Phase 1: empty, Phase 2: populated
+    # 1b. Memory recall (LLM-free)
+    memory_context = _recall_memory(file_context)
     strategizer = StrategyPhase(openai_client, settings)
     classification, strategy = await strategizer.plan(task, file_context, memory_context)
 
@@ -168,7 +169,7 @@ async def orchestrate_v2(
 
     # ── Stage 4: LEARN ──
     tracker.transition("learn")
-    LearnPhase().learn(state)
+    LearnPhase(_memory_data_dir()).learn(state)
     yield AgentLogEntry(
         phase="L", action="complete",
         content="学習完了",
@@ -218,3 +219,23 @@ def _resolve_file_path(file_id: str, settings: Settings) -> str:
             return os.path.join(upload_dir, entry)
     # Fallback: treat file_id as direct path
     return os.path.join(upload_dir, file_id)
+
+
+def _memory_data_dir() -> Path:
+    """Return the default memory data directory."""
+    return Path(__file__).resolve().parents[2] / "memory" / "data"
+
+
+def _recall_memory(file_context) -> MemoryContext:
+    """Recall past patterns and gotchas from file-based memory."""
+    from memory.search import search_gotchas, search_patterns
+
+    data_dir = _memory_data_dir()
+    if not data_dir.exists():
+        return MemoryContext()
+
+    feature_keys = file_context.get_feature_keys()
+    patterns = search_patterns(data_dir, file_features=feature_keys)
+    gotchas = search_gotchas(data_dir, file_features=feature_keys)
+
+    return MemoryContext(patterns=patterns, gotchas=gotchas)
