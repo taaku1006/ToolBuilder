@@ -333,16 +333,53 @@ def _classify_error(error: str | None) -> str | None:
     if not error:
         return None
     lower = error.lower()
-    if "import" in lower:
+
+    # Shell / pip commands in Python code
+    if "pip install" in lower:
+        return "pip_install_in_code"
+
+    # Excel-specific
+    if "mergedcell" in lower or "merged cell" in lower:
+        return "merged_cells"
+    if "invalidfileexception" in lower or "not a zip file" in lower or "openpyxl" in lower and "cannot" in lower:
+        return "corrupt_excel"
+    if "xlrd" in lower or ".xls" in lower and "not supported" in lower:
+        return "legacy_xls"
+
+    # CSV / text encoding
+    if "unicodedecodeerror" in lower or "codec" in lower or "charmap" in lower:
+        return "encoding_error"
+    if "parserwarning" in lower or "tokenizing" in lower or "expected" in lower and "fields" in lower:
+        return "csv_parse_error"
+
+    # Data type / format
+    if "datetimeindex" in lower or "to_datetime" in lower or "strftime" in lower:
+        return "datetime_format"
+    if "nan" in lower or "fillna" in lower or "cannot convert float nan" in lower:
+        return "nan_handling"
+    if "valueerror" in lower and ("convert" in lower or "cast" in lower):
+        return "value_cast_error"
+
+    # Standard Python errors
+    if "import" in lower or "modulenotfounderror" in lower or "no module named" in lower:
         return "import_error"
-    if "syntax" in lower:
+    if "syntaxerror" in lower or "syntax" in lower:
         return "syntax_error"
-    if "type" in lower:
+    if "typeerror" in lower:
         return "type_error"
-    if "key" in lower:
+    if "keyerror" in lower:
         return "key_error"
-    if "file" in lower or "no such" in lower:
+    if "indexerror" in lower or "out of range" in lower:
+        return "index_error"
+    if "attributeerror" in lower:
+        return "attribute_error"
+    if "permissionerror" in lower or "permission denied" in lower:
+        return "permission_error"
+    if "filenotfounderror" in lower or "no such file" in lower:
         return "file_not_found"
-    if "timeout" in lower:
+    if "memoryerror" in lower or "killed" in lower:
+        return "memory_error"
+    if "timeout" in lower or "timed out" in lower:
         return "timeout"
+
     return "runtime_error"
