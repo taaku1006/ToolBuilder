@@ -384,7 +384,7 @@ class TestRunnerFileIdIntegration:
             settings_factory=make_settings,
         )
 
-        with patch("eval.runner.orchestrate", side_effect=mock_orchestrate):
+        with patch("eval.runner.orchestrate_v2", side_effect=mock_orchestrate):
             result = await runner.run_single(arch, case)
 
         # file_id must be non-None
@@ -440,7 +440,7 @@ class TestRunnerFileIdIntegration:
             settings_factory=make_settings,
         )
 
-        with patch("eval.runner.orchestrate", side_effect=mock_orchestrate):
+        with patch("eval.runner.orchestrate_v2", side_effect=mock_orchestrate):
             await runner.run_single(arch, case)
 
         assert called_with.get("file_id") is None
@@ -488,7 +488,7 @@ class TestRunnerFileIdIntegration:
             settings_factory=make_settings,
         )
 
-        with patch("eval.runner.orchestrate", side_effect=mock_orchestrate):
+        with patch("eval.runner.orchestrate_v2", side_effect=mock_orchestrate):
             result = await runner.run_single(arch, case)
 
         # Should capture an error since file is missing

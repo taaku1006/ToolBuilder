@@ -234,19 +234,38 @@ class TestGenerateSseMode:
         client = TestClient(app)
         return client
 
+    def _mock_orchestrate_v2(self, python_code: str = "print('hello')"):
+        """Patch orchestrate_v2 to yield predictable AgentLogEntry objects."""
+        from pipeline.orchestrator_types import AgentLogEntry, _now_iso
+
+        final_payload = json.dumps({
+            "python_code": python_code,
+            "summary": "テスト",
+            "steps": ["step1"],
+            "tips": "v2 test",
+            "debug_retries": 0,
+            "total_tokens": 100,
+            "prompt_tokens": 60,
+            "completion_tokens": 40,
+            "api_calls": 2,
+            "phase_tokens": {},
+        }, ensure_ascii=False)
+
+        async def fake_orchestrate(**kwargs):
+            yield AgentLogEntry(phase="U", action="start", content="分析中", timestamp=_now_iso())
+            yield AgentLogEntry(phase="U", action="complete", content="分析完了", timestamp=_now_iso())
+            yield AgentLogEntry(phase="G", action="start", content="生成中", timestamp=_now_iso())
+            yield AgentLogEntry(phase="G", action="complete", content="生成完了", timestamp=_now_iso())
+            yield AgentLogEntry(phase="L", action="complete", content="学習完了", timestamp=_now_iso())
+            yield AgentLogEntry(phase="C", action="complete", content=final_payload, timestamp=_now_iso())
+
+        return patch("routers.generate.orchestrate_v2", side_effect=fake_orchestrate)
+
     def test_sse_mode_returns_200(self) -> None:
         settings = _make_settings(reflection_enabled=False)
         client = self._make_client(settings)
 
-        with patch("infra.openai_client.OpenAI") as mock_openai:
-            mock_instance = MagicMock()
-            mock_openai.return_value = mock_instance
-            mock_choice = MagicMock()
-            mock_choice.message.content = _phase_c_json()
-            mock_instance.chat.completions.create.return_value = MagicMock(
-                choices=[mock_choice]
-            )
-
+        with self._mock_orchestrate_v2():
             response = client.post(
                 "/api/generate",
                 json={"task": "集計する"},
@@ -254,7 +273,6 @@ class TestGenerateSseMode:
             )
 
         from main import app
-
         app.dependency_overrides.clear()
         assert response.status_code == 200
 
@@ -263,15 +281,7 @@ class TestGenerateSseMode:
         settings = _make_settings(reflection_enabled=False)
         client = self._make_client(settings)
 
-        with patch("infra.openai_client.OpenAI") as mock_openai:
-            mock_instance = MagicMock()
-            mock_openai.return_value = mock_instance
-            mock_choice = MagicMock()
-            mock_choice.message.content = _phase_c_json()
-            mock_instance.chat.completions.create.return_value = MagicMock(
-                choices=[mock_choice]
-            )
-
+        with self._mock_orchestrate_v2():
             response = client.post(
                 "/api/generate",
                 json={"task": "集計する"},
@@ -279,7 +289,6 @@ class TestGenerateSseMode:
             )
 
         from main import app
-
         app.dependency_overrides.clear()
         assert "text/event-stream" in response.headers.get("content-type", "")
 
@@ -288,15 +297,7 @@ class TestGenerateSseMode:
         settings = _make_settings(reflection_enabled=False)
         client = self._make_client(settings)
 
-        with patch("infra.openai_client.OpenAI") as mock_openai:
-            mock_instance = MagicMock()
-            mock_openai.return_value = mock_instance
-            mock_choice = MagicMock()
-            mock_choice.message.content = _phase_c_json()
-            mock_instance.chat.completions.create.return_value = MagicMock(
-                choices=[mock_choice]
-            )
-
+        with self._mock_orchestrate_v2():
             response = client.post(
                 "/api/generate",
                 json={"task": "集計する"},
@@ -304,7 +305,6 @@ class TestGenerateSseMode:
             )
 
         from main import app
-
         app.dependency_overrides.clear()
 
         body = response.text
@@ -316,25 +316,16 @@ class TestGenerateSseMode:
 
         assert len(data_lines) >= 1
         for line in data_lines:
-            parsed = json.loads(line)  # must not raise
+            parsed = json.loads(line)
             assert isinstance(parsed, dict)
 
     def test_sse_final_event_has_python_code(self) -> None:
         """The last SSE data event must contain python_code."""
         settings = _make_settings(reflection_enabled=False)
         client = self._make_client(settings)
-
         expected_code = "print('sse test code')"
 
-        with patch("infra.openai_client.OpenAI") as mock_openai:
-            mock_instance = MagicMock()
-            mock_openai.return_value = mock_instance
-            mock_choice = MagicMock()
-            mock_choice.message.content = _phase_c_json(python_code=expected_code)
-            mock_instance.chat.completions.create.return_value = MagicMock(
-                choices=[mock_choice]
-            )
-
+        with self._mock_orchestrate_v2(python_code=expected_code):
             response = client.post(
                 "/api/generate",
                 json={"task": "集計する"},
@@ -342,7 +333,6 @@ class TestGenerateSseMode:
             )
 
         from main import app
-
         app.dependency_overrides.clear()
 
         body = response.text
@@ -352,7 +342,6 @@ class TestGenerateSseMode:
             if line.startswith("data: ")
         ]
 
-        # Find the C/complete event which has python_code merged at top level
         c_complete = None
         for line in data_lines:
             parsed = json.loads(line)
@@ -367,15 +356,7 @@ class TestGenerateSseMode:
         settings = _make_settings(reflection_enabled=False)
         client = self._make_client(settings)
 
-        with patch("infra.openai_client.OpenAI") as mock_openai:
-            mock_instance = MagicMock()
-            mock_openai.return_value = mock_instance
-            mock_choice = MagicMock()
-            mock_choice.message.content = _phase_c_json()
-            mock_instance.chat.completions.create.return_value = MagicMock(
-                choices=[mock_choice]
-            )
-
+        with self._mock_orchestrate_v2():
             response = client.post(
                 "/api/generate",
                 json={"task": "集計する"},
@@ -383,7 +364,6 @@ class TestGenerateSseMode:
             )
 
         from main import app
-
         app.dependency_overrides.clear()
 
         body = response.text

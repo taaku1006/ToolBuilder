@@ -19,6 +19,7 @@ from schemas.generate import GenerateRequest, GenerateResponse
 from infra.openai_client import OpenAIClient
 from infra.prompt_builder import SYSTEM_PROMPT, build_user_prompt
 from excel.xlsx_parser import SheetInfo, build_file_context, parse_file
+from pipeline.v2 import orchestrate_v2
 
 router = APIRouter()
 
@@ -120,9 +121,7 @@ def _sse_response(request: GenerateRequest, settings: Settings) -> StreamingResp
     """Return an SSE StreamingResponse that streams orchestration progress."""
 
     async def event_stream():  # noqa: ANN202
-        from pipeline.agent_orchestrator import orchestrate
-
-        async for entry in orchestrate(
+        async for entry in orchestrate_v2(
             task=request.task,
             file_id=request.file_id,
             settings=settings,
