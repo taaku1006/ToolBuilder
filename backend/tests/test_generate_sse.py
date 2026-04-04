@@ -142,13 +142,12 @@ class TestGenerateJsonMode:
         settings = _make_settings(reflection_enabled=False)
         client = self._make_client(settings)
 
-        with patch("infra.openai_client.OpenAI") as mock_openai:
-            mock_instance = MagicMock()
-            mock_openai.return_value = mock_instance
+        with patch("infra.llm_client.litellm") as mock_litellm:
             mock_choice = MagicMock()
             mock_choice.message.content = _phase_c_json()
-            mock_instance.chat.completions.create.return_value = MagicMock(
-                choices=[mock_choice]
+            mock_litellm.completion.return_value = MagicMock(
+                choices=[mock_choice],
+                usage=MagicMock(prompt_tokens=10, completion_tokens=20, total_tokens=30),
             )
 
             response = client.post(
@@ -166,13 +165,12 @@ class TestGenerateJsonMode:
         settings = _make_settings(reflection_enabled=False)
         client = self._make_client(settings)
 
-        with patch("infra.openai_client.OpenAI") as mock_openai:
-            mock_instance = MagicMock()
-            mock_openai.return_value = mock_instance
+        with patch("infra.llm_client.litellm") as mock_litellm:
             mock_choice = MagicMock()
             mock_choice.message.content = _phase_c_json(summary="テスト集計")
-            mock_instance.chat.completions.create.return_value = MagicMock(
-                choices=[mock_choice]
+            mock_litellm.completion.return_value = MagicMock(
+                choices=[mock_choice],
+                usage=MagicMock(prompt_tokens=10, completion_tokens=20, total_tokens=30),
             )
 
             response = client.post(
@@ -197,13 +195,12 @@ class TestGenerateJsonMode:
         settings = _make_settings(reflection_enabled=False)
         client = self._make_client(settings)
 
-        with patch("infra.openai_client.OpenAI") as mock_openai:
-            mock_instance = MagicMock()
-            mock_openai.return_value = mock_instance
+        with patch("infra.llm_client.litellm") as mock_litellm:
             mock_choice = MagicMock()
             mock_choice.message.content = _phase_c_json()
-            mock_instance.chat.completions.create.return_value = MagicMock(
-                choices=[mock_choice]
+            mock_litellm.completion.return_value = MagicMock(
+                choices=[mock_choice],
+                usage=MagicMock(prompt_tokens=10, completion_tokens=20, total_tokens=30),
             )
 
             response = client.post(

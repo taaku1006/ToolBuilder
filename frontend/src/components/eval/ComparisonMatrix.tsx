@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { EvalReport, ResultDetail } from '../../api/eval'
 import { getResultFiles } from '../../api/eval'
+import { ResultDetailPanel } from './ResultDetailPanel'
 
 function scoreColor(score: number, max: number): string {
   const ratio = score / max
@@ -16,43 +17,6 @@ function scoreBg(score: number, max: number): string {
   return 'bg-red-900/20'
 }
 
-function DetailPopup({ detail, onClose }: { detail: ResultDetail; onClose: () => void }) {
-  const qd = detail.quality_details
-  const ld = detail.llm_eval_details
-  return (
-    <div className="absolute z-50 top-full left-1/2 -translate-x-1/2 mt-1 w-80 bg-gray-800 border border-gray-600 rounded-lg p-3 shadow-xl text-left">
-      <button onClick={onClose} className="absolute top-1 right-2 text-gray-500 hover:text-gray-300 text-xs">x</button>
-      <div className="text-xs space-y-2">
-        {qd && (
-          <div>
-            <div className="font-semibold text-pink-300 mb-1">F: Mechanical ({Math.round((detail.quality_score ?? 0) * 100)}%)</div>
-            {qd.missing_sheets && qd.missing_sheets.length > 0 && (
-              <div className="text-red-400">Missing: {qd.missing_sheets.join(', ')}</div>
-            )}
-            {qd.extra_sheets && qd.extra_sheets.length > 0 && (
-              <div className="text-yellow-400">Extra: {qd.extra_sheets.join(', ')}</div>
-            )}
-            {qd.error && <div className="text-red-400">Error: {qd.error}</div>}
-          </div>
-        )}
-        {ld && (
-          <div>
-            <div className="font-semibold text-purple-300 mb-1">G: LLM Eval ({detail.llm_eval_score?.toFixed(1)}/10)</div>
-            <div className="grid grid-cols-3 gap-1 text-[10px]">
-              <span>Semantic: {ld.semantic_correctness ?? '—'}/10</span>
-              <span>Integrity: {ld.data_integrity ?? '—'}/10</span>
-              <span>Complete: {ld.completeness ?? '—'}/10</span>
-            </div>
-            {ld.reasoning && (
-              <div className="mt-1 text-gray-400 leading-tight max-h-24 overflow-y-auto">{ld.reasoning}</div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
 interface ComparisonMatrixProps {
   report: EvalReport
   runId?: string
@@ -60,7 +24,7 @@ interface ComparisonMatrixProps {
 
 export function ComparisonMatrix({ report, runId }: ComparisonMatrixProps) {
   const { comparison_matrix, result_details, architecture_ids, test_case_ids } = report
-  const [expandedCell, setExpandedCell] = useState<string | null>(null)
+  const [expandedCell, setExpandedCell] = useState<{ caseId: string; archId: string } | null>(null)
 
   const handleDownload = async (archId: string, caseId: string) => {
     if (!runId) return
@@ -73,6 +37,14 @@ export function ComparisonMatrix({ report, runId }: ComparisonMatrixProps) {
       // No files available
     }
   }
+
+  const toggleDetail = (caseId: string, archId: string) => {
+    setExpandedCell((prev) =>
+      prev?.caseId === caseId && prev?.archId === archId ? null : { caseId, archId }
+    )
+  }
+
+  const colSpan = architecture_ids.length + 1
 
   return (
     <div className="overflow-x-auto">
@@ -89,61 +61,72 @@ export function ComparisonMatrix({ report, runId }: ComparisonMatrixProps) {
         </thead>
         <tbody>
           {test_case_ids.map((caseId) => (
-            <tr key={caseId} className="border-b border-gray-800">
-              <td className="py-2 px-3 text-gray-300 font-mono text-xs">{caseId}</td>
-              {architecture_ids.map((archId) => {
-                const ok = comparison_matrix[caseId]?.[archId]
-                const detail = result_details?.[caseId]?.[archId]
-                const cellKey = `${caseId}__${archId}`
-                const isExpanded = expandedCell === cellKey
-                const qs = detail?.quality_score
-                const ls = detail?.llm_eval_score
-                const hasFiles = detail?.output_files && detail.output_files.length > 0
+            <>
+              <tr key={caseId} className="border-b border-gray-800">
+                <td className="py-2 px-3 text-gray-300 font-mono text-xs">{caseId.slice(0, 8)}</td>
+                {architecture_ids.map((archId) => {
+                  const ok = comparison_matrix[caseId]?.[archId]
+                  const detail = result_details?.[caseId]?.[archId]
+                  const qs = detail?.quality_score
+                  const ls = detail?.llm_eval_score
+                  const hasFiles = detail?.output_files && detail.output_files.length > 0
+                  const isExpanded = expandedCell?.caseId === caseId && expandedCell?.archId === archId
 
-                return (
-                  <td key={archId} className={`text-center py-2 px-2 relative ${qs != null ? scoreBg(qs, 1.0) : ''}`}>
-                    <div className="flex flex-col items-center gap-0.5">
-                      <span className={ok ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
-                        {ok ? 'OK' : 'NG'}
-                      </span>
-                      {qs != null && (
-                        <span className={`text-[10px] font-mono ${scoreColor(qs, 1.0)}`}>
-                          F:{Math.round(qs * 100)}%
+                  return (
+                    <td key={archId} className={`text-center py-2 px-2 ${qs != null ? scoreBg(qs, 1.0) : ''}`}>
+                      <div className="flex flex-col items-center gap-0.5">
+                        <span className={ok ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
+                          {ok ? 'OK' : 'NG'}
                         </span>
-                      )}
-                      {ls != null && (
-                        <span className={`text-[10px] font-mono ${scoreColor(ls, 10)}`}>
-                          G:{ls.toFixed(1)}
-                        </span>
-                      )}
-                      <div className="flex gap-1 mt-0.5">
-                        {detail && (
-                          <button
-                            onClick={() => setExpandedCell(isExpanded ? null : cellKey)}
-                            className="text-[9px] px-1 py-0.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300"
-                            title="Show details"
-                          >
-                            Details
-                          </button>
+                        {qs != null && (
+                          <span className={`text-[10px] font-mono ${scoreColor(qs, 1.0)}`}>
+                            F:{Math.round(qs * 100)}%
+                          </span>
                         )}
-                        {hasFiles && (
-                          <button
-                            onClick={() => handleDownload(archId, caseId)}
-                            className="text-[9px] px-1 py-0.5 rounded bg-blue-900 hover:bg-blue-800 text-blue-300"
-                            title="Download output files"
-                          >
-                            DL
-                          </button>
+                        {ls != null && (
+                          <span className={`text-[10px] font-mono ${scoreColor(ls, 10)}`}>
+                            G:{ls.toFixed(1)}
+                          </span>
                         )}
+                        <div className="flex gap-1 mt-0.5">
+                          <button
+                            onClick={() => toggleDetail(caseId, archId)}
+                            className={`text-[9px] px-1.5 py-0.5 rounded transition-colors ${
+                              isExpanded
+                                ? 'bg-blue-700 text-white'
+                                : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                            }`}
+                          >
+                            {isExpanded ? 'Close' : 'Details'}
+                          </button>
+                          {hasFiles && (
+                            <button
+                              onClick={() => handleDownload(archId, caseId)}
+                              className="text-[9px] px-1 py-0.5 rounded bg-blue-900 hover:bg-blue-800 text-blue-300"
+                              title="Download output files"
+                            >
+                              DL
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                    {isExpanded && detail && (
-                      <DetailPopup detail={detail} onClose={() => setExpandedCell(null)} />
-                    )}
+                    </td>
+                  )
+                })}
+              </tr>
+              {/* Expanded detail row */}
+              {expandedCell?.caseId === caseId && runId && (
+                <tr key={`${caseId}__detail`} className="border-b border-gray-700">
+                  <td colSpan={colSpan} className="p-2">
+                    <ResultDetailPanel
+                      runId={runId}
+                      archId={expandedCell.archId}
+                      caseId={caseId}
+                    />
                   </td>
-                )
-              })}
-            </tr>
+                </tr>
+              )}
+            </>
           ))}
         </tbody>
       </table>

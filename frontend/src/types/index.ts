@@ -3,6 +3,8 @@ export interface GenerateRequest {
   file_id?: string
   max_steps?: number
   skill_id?: string
+  model?: string
+  stage_models?: Record<string, string>
 }
 
 export interface AgentLogEntry {

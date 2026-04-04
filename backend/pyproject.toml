@@ -4,22 +4,33 @@ version = "0.1.0"
 description = "Excel x NL Tool Builder - Backend API"
 requires-python = ">=3.13"
 dependencies = [
-    "fastapi>=0.115",
+    # Web framework
+    "fastapi>=0.127",
     "uvicorn[standard]>=0.34",
-    "pydantic>=2.0",
-    "pydantic-settings>=2.0",
-    "openai>=1.60",
-    "openpyxl>=3.1",
-    "pandas>=2.2",
-    "python-multipart>=0.0.18",
-    "sqlalchemy>=2.0",
-    "aiosqlite>=0.21",
-    "python-dotenv>=1.0",
-    "langfuse>=2.0,<3.0",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.13",
+
+    # LLM / AI
+    "litellm>=1.67",
     "autogen-agentchat>=0.7.5",
     "autogen-ext[openai]>=0.7.5",
-    "tiktoken>=0.8.0",
-    "aiofiles>=24.0",
+    "tiktoken>=0.9",
+
+    # Observability
+    "langfuse>=4.0",
+
+    # Excel / Data
+    "openpyxl>=3.1",
+    "pandas>=2.2",
+
+    # DB
+    "sqlalchemy>=2.0",
+    "aiosqlite>=0.21",
+
+    # Utilities
+    "python-multipart>=0.0.18",
+    "python-dotenv>=1.0",
+    "aiofiles>=24.1",
 ]
 
 [dependency-groups]
@@ -28,8 +39,8 @@ dev = [
     "pytest-asyncio>=0.25",
     "pytest-cov>=6.0",
     "httpx>=0.28",
-    "black>=24.0",
-    "ruff>=0.9",
+    "black>=25.0",
+    "ruff>=0.11",
 ]
 
 [tool.pytest.ini_options]

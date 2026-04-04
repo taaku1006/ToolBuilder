@@ -4,6 +4,7 @@ import { createHistory } from '../api/history'
 import { createSkill } from '../api/skills'
 import { useHistoryStore } from './useHistoryStore'
 import { useSkillsStore } from './useSkillsStore'
+import { useModelStore } from './useModelStore'
 import type { GenerateResponse, AgentLogEntry } from '../types'
 
 interface GenerateState {
@@ -63,9 +64,18 @@ export const useGenerateStore = create<GenerateState>((set, get) => ({
 
     set({ loading: true, error: null, agentLog: [], isStreaming: true })
 
-    const body: Record<string, string> = { task }
+    const body: Record<string, unknown> = { task }
     if (fileId != null) {
       body['file_id'] = fileId
+    }
+
+    // Include model selection from model store
+    const modelState = useModelStore.getState()
+    if (modelState.selectedModel) {
+      body['model'] = modelState.selectedModel
+    }
+    if (Object.keys(modelState.stageOverrides).length > 0) {
+      body['stage_models'] = modelState.stageOverrides
     }
 
     try {

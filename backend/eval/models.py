@@ -10,7 +10,8 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
 # Cost per 1M tokens by model (input, output) — 2025-05 pricing
-_MODEL_PRICING: dict[str, tuple[float, float]] = {
+MODEL_PRICING: dict[str, tuple[float, float]] = {
+    # OpenAI
     "gpt-4o":           (2.50, 10.00),
     "gpt-4o-mini":      (0.15,  0.60),
     "gpt-4.1":          (2.00,  8.00),
@@ -21,6 +22,17 @@ _MODEL_PRICING: dict[str, tuple[float, float]] = {
     "o3":               (2.00,  8.00),
     "o3-mini":          (1.10,  4.40),
     "o4-mini":          (1.10,  4.40),
+    # Anthropic
+    "anthropic/claude-opus-4-6":      (15.00, 75.00),
+    "anthropic/claude-sonnet-4-6":    (3.00,  15.00),
+    "anthropic/claude-haiku-4-5":     (0.80,   4.00),
+    # Google Gemini
+    "gemini/gemini-2.5-pro":          (1.25,  10.00),
+    "gemini/gemini-2.5-flash":        (0.15,   0.60),
+    # Ollama (local — free)
+    "ollama/gemma4:e4b":              (0.00,   0.00),
+    "ollama/gemma4:e2b":              (0.00,   0.00),
+    "ollama/gemma3:4b":               (0.00,   0.00),
 }
 
 
@@ -136,7 +148,7 @@ class EvalMetrics:
 
     def estimated_cost_usd(self, model: str = "gpt-4o") -> float:
         """Estimate cost based on input/output token counts and model pricing."""
-        input_rate, output_rate = _MODEL_PRICING.get(model, _MODEL_PRICING["gpt-4o"])
+        input_rate, output_rate = MODEL_PRICING.get(model, MODEL_PRICING["gpt-4o"])
         input_cost = (self.prompt_tokens / 1_000_000) * input_rate
         output_cost = (self.completion_tokens / 1_000_000) * output_rate
         return input_cost + output_cost

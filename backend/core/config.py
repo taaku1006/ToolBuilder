@@ -4,8 +4,27 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
-    openai_api_key: str
+    # Provider-agnostic LLM settings (take precedence over openai_* when set)
+    llm_model: str = ""
+    llm_base_url: str = ""
+
+    # Per-provider API keys
+    openai_api_key: str = ""
+    anthropic_api_key: str = ""
+    gemini_api_key: str = ""
+
+    # Legacy OpenAI-specific (used as fallback when llm_* is empty)
     openai_model: str = "gpt-4o"
+
+    @property
+    def active_model(self) -> str:
+        """Return the effective model: LLM_MODEL takes precedence over OPENAI_MODEL."""
+        return self.llm_model or self.openai_model
+
+    @property
+    def active_base_url(self) -> str:
+        """Return the effective base URL: LLM_BASE_URL takes precedence."""
+        return self.llm_base_url
 
     database_url: str = "sqlite+aiosqlite:///./db/history.db"
     upload_dir: str = "./uploads"

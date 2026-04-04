@@ -13,6 +13,7 @@ import {
   getRunSnapshot,
   compareRuns,
   diffRuns,
+  updateArchitecture,
 } from '../api/eval'
 import { useEvalData } from '../hooks/useEvalData'
 import { useRunPolling } from '../hooks/useRunPolling'
@@ -27,7 +28,7 @@ import {
 } from './eval'
 
 export function EvalDashboard() {
-  const { archs, cases, pastRuns, setPastRuns, error: dataError, reloadCases } = useEvalData()
+  const { archs, cases, pastRuns, setPastRuns, error: dataError, reload, reloadCases } = useEvalData()
   const { selectedArchs, toggleArch } = useArchSelection()
   const [selectedCases, setSelectedCases] = useState<Set<string>>(new Set())
   const [detailArchId, setDetailArchId] = useState<string | null>(null)
@@ -169,6 +170,14 @@ export function EvalDashboard() {
           toggleArch={toggleArch}
           detailArchId={detailArchId}
           setDetailArchId={setDetailArchId}
+          onModelChange={async (archId, model) => {
+            try {
+              await updateArchitecture(archId, { model })
+              await reload()
+            } catch {
+              // Silently ignore
+            }
+          }}
         />
       </div>
 

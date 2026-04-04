@@ -1,5 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { Architecture } from '../../api/eval'
+import { updateArchitecture } from '../../api/eval'
+import { useModelStore } from '../../stores/useModelStore'
 import { ArchDetailPanel } from './ArchDetailPanel'
 
 type ArchCategory = 'Adaptive v2' | 'MagenticOne'
@@ -59,6 +61,45 @@ function getRetryLimit(a: Architecture): number {
   return a.pipeline?.debug_retry_limit ?? a.debug_retry_limit
 }
 
+function InlineModelSelect({ value, onChange }: { value: string; onChange: (m: string) => void }) {
+  const { models, loaded, fetchModels } = useModelStore()
+
+  useEffect(() => {
+    void fetchModels()
+  }, [fetchModels])
+
+  if (!loaded || models.length === 0) {
+    return <span className="text-xs text-gray-500 font-mono">{value}</span>
+  }
+
+  const grouped = new Map<string, typeof models>()
+  for (const m of models) {
+    const list = grouped.get(m.provider) ?? []
+    list.push(m)
+    grouped.set(m.provider, list)
+  }
+
+  const LABELS: Record<string, string> = {
+    openai: 'OpenAI', anthropic: 'Anthropic', google: 'Google', ollama: 'Ollama',
+  }
+
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="bg-transparent border-0 text-xs text-gray-400 font-mono cursor-pointer hover:text-gray-200 focus:outline-none focus:text-gray-200 py-0 px-0"
+    >
+      {Array.from(grouped.entries()).map(([provider, items]) => (
+        <optgroup key={provider} label={LABELS[provider] ?? provider}>
+          {items.map((m) => (
+            <option key={m.id} value={m.id}>{m.display_name}</option>
+          ))}
+        </optgroup>
+      ))}
+    </select>
+  )
+}
+
 interface ArchTableRowProps {
   arch: Architecture
   category: ArchCategory
@@ -67,6 +108,7 @@ interface ArchTableRowProps {
   detailArchId: string | null
   setDetailArchId: (id: string | null) => void
   colSpan: number
+  onModelChange?: (archId: string, model: string) => void
 }
 
 function ArchTableRow({
@@ -77,6 +119,7 @@ function ArchTableRow({
   detailArchId,
   setDetailArchId,
   colSpan,
+  onModelChange,
 }: ArchTableRowProps) {
   const isDetailOpen = detailArchId === arch.id
   const style = CATEGORY_STYLES[category]
@@ -100,7 +143,12 @@ function ArchTableRow({
         </td>
         <td className="py-2 px-2 font-mono text-xs text-gray-200 whitespace-nowrap">{arch.id}</td>
         <td className="py-2 px-2 text-xs text-gray-400 max-w-[240px] truncate">{arch.description}</td>
-        <td className="py-2 px-2 text-xs text-gray-500 font-mono whitespace-nowrap">{arch.model}</td>
+        <td className="py-2 px-2" onClick={(e) => e.stopPropagation()}>
+          <InlineModelSelect
+            value={arch.model}
+            onChange={(m) => onModelChange?.(arch.id, m)}
+          />
+        </td>
         {isV2 ? (
           <>
             <td className="py-2 px-2 text-center">
@@ -147,6 +195,7 @@ interface ArchCategoryGroupProps {
   detailArchId: string | null
   setDetailArchId: (id: string | null) => void
   colSpan: number
+  onModelChange?: (archId: string, model: string) => void
 }
 
 function ArchCategoryGroup({
@@ -159,6 +208,7 @@ function ArchCategoryGroup({
   detailArchId,
   setDetailArchId,
   colSpan,
+  onModelChange,
 }: ArchCategoryGroupProps) {
   const style = CATEGORY_STYLES[category]
 
@@ -191,6 +241,7 @@ function ArchCategoryGroup({
             detailArchId={detailArchId}
             setDetailArchId={setDetailArchId}
             colSpan={colSpan}
+            onModelChange={onModelChange}
           />
         )
       })}
@@ -204,6 +255,7 @@ export interface ArchitectureTableProps {
   toggleArch: (id: string) => void
   detailArchId: string | null
   setDetailArchId: (id: string | null) => void
+  onModelChange?: (archId: string, model: string) => void
 }
 
 export function ArchitectureTable({
@@ -212,6 +264,7 @@ export function ArchitectureTable({
   toggleArch,
   detailArchId,
   setDetailArchId,
+  onModelChange,
 }: ArchitectureTableProps) {
   const [collapsedCategories, setCollapsedCategories] = useState<Set<ArchCategory>>(new Set())
 
@@ -256,6 +309,7 @@ export function ArchitectureTable({
                 detailArchId={detailArchId}
                 setDetailArchId={setDetailArchId}
                 colSpan={colSpan}
+                onModelChange={onModelChange}
               />
             )
           })}

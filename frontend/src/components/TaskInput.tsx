@@ -1,5 +1,6 @@
 import type { KeyboardEvent } from 'react'
 import { useGenerateStore } from '../stores/useGenerateStore'
+import { ModelSelector } from './ModelSelector'
 
 interface TaskInputProps {
   fileId?: string
@@ -25,17 +26,20 @@ export function TaskInput({ fileId }: TaskInputProps) {
         onKeyDown={handleKeyDown}
         disabled={loading}
       />
-      <div className="mt-3 flex items-center justify-between">
-        <span className="text-xs text-gray-500">
-          Cmd+Enter でも生成できます
-        </span>
-        <button
+      <div className="mt-3 flex flex-col gap-2">
+        <ModelSelector />
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-gray-500">
+            Cmd+Enter でも生成できます
+          </span>
+          <button
           className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={() => generateSSE(fileId)}
           disabled={loading}
         >
-          {loading ? '生成中...' : '生成'}
-        </button>
+            {loading ? '生成中...' : '生成'}
+          </button>
+        </div>
       </div>
     </div>
   )

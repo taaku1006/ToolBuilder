@@ -1,7 +1,7 @@
 {
   "id": "v2_adaptive",
   "architecture_type": "v2_adaptive",
-  "model": "gpt-4o",
+  "model": "ollama/gemma4:e2b",
   "description": "Adaptive Pipeline v2: 4-stage architecture with unified verify-fix loop",
   "pipeline": {
     "explore": false,

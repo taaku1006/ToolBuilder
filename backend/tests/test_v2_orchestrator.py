@@ -19,8 +19,8 @@ def mock_settings():
     )
 
 
-def _make_mock_openai_response(content: str):
-    """Create a mock OpenAI API response."""
+def _make_mock_litellm_response(content: str):
+    """Create a mock LiteLLM API response."""
     mock_response = MagicMock()
     mock_response.choices = [MagicMock()]
     mock_response.choices[0].message.content = content
@@ -48,18 +48,14 @@ class TestOrchestrateV2:
 
         code_response = '```python\nimport pandas as pd\nprint("done")\n```'
 
-        with patch("infra.openai_client.OpenAI") as mock_openai_cls, \
+        with patch("infra.llm_client.litellm") as mock_litellm, \
              patch("pipeline.v2.stages.understand.parse_file") as mock_parse, \
              patch("pipeline.v2.stages.understand.load_prompt") as mock_load_prompt:
 
-            # Mock OpenAI
-            mock_instance = MagicMock()
-            mock_openai_cls.return_value = mock_instance
-
             # First call: strategy, Second call: code generation
-            mock_instance.chat.completions.create.side_effect = [
-                _make_mock_openai_response(strategy_json),
-                _make_mock_openai_response(code_response),
+            mock_litellm.completion.side_effect = [
+                _make_mock_litellm_response(strategy_json),
+                _make_mock_litellm_response(code_response),
             ]
 
             # Mock file parser
@@ -98,7 +94,7 @@ class TestOrchestrateV2:
         """orchestrate_v2 should raise CancelledError when cancel_check returns True."""
         from pipeline.orchestrator_types import CancelledError
 
-        with patch("infra.openai_client.OpenAI"):
+        with patch("infra.llm_client.litellm"):
             from pipeline.v2 import orchestrate_v2
             with pytest.raises(CancelledError):
                 async for _ in orchestrate_v2(
