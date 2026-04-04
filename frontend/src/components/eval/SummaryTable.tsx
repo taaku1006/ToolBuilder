@@ -47,41 +47,13 @@ export function SummaryTable({ report, archs }: SummaryTableProps) {
                   {arch && (
                     <div className="mt-1">
                       <div className="text-xs text-gray-500">{arch.description}</div>
-                      {arch.pipeline ? (
-                        <div className="flex items-center gap-1 mt-1 flex-wrap">
-                          {arch.pipeline.explore && <PhaseTag phase="A" />}
-                          {arch.pipeline.reflect && <PhaseTag phase="B" />}
-                          {arch.pipeline.decompose && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-900/50 text-yellow-300 font-mono">
-                              P→[C.n→D.n]
-                            </span>
-                          )}
-                          {!arch.pipeline.decompose && (
-                            <>
-                              <PhaseTag phase="C" />
-                              <PhaseTag phase="D" />
-                            </>
-                          )}
-                          {arch.pipeline.eval_debug && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-pink-900/50 text-pink-300 font-mono">
-                              F{arch.pipeline.eval_retry_strategy !== 'none' ? `↺${arch.pipeline.eval_retry_strategy}` : ''}
-                            </span>
-                          )}
-                          {(arch.pipeline as unknown as Record<string, unknown>).llm_eval_debug === true && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-900/50 text-purple-300 font-mono">
-                              G
-                            </span>
-                          )}
-                          <span className="text-xs text-gray-600 ml-1">{arch.model}</span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1.5 mt-1">
-                          {arch.phases.map((p) => (
-                            <PhaseTag key={p} phase={p} />
-                          ))}
-                          <span className="text-xs text-gray-600 ml-1">{arch.model}</span>
-                        </div>
-                      )}
+                      <div className="flex items-center gap-1 mt-1 flex-wrap">
+                        <PhaseTag phase="U" />
+                        <PhaseTag phase="G" />
+                        <PhaseTag phase="VF" />
+                        <PhaseTag phase="L" />
+                        <span className="text-xs text-gray-600 ml-1">{arch.model}</span>
+                      </div>
                     </div>
                   )}
                 </td>

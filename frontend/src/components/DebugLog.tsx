@@ -9,13 +9,13 @@ interface RetryEntry {
   content: string
 }
 
-function extractPhaseDData(agentLog: AgentLogEntry[]): {
+function extractVerifyFixData(agentLog: AgentLogEntry[]): {
   startEntry: AgentLogEntry | null
   retries: RetryEntry[]
   completeEntry: AgentLogEntry | null
   errorEntry: AgentLogEntry | null
 } {
-  const phaseDEntries = agentLog.filter((entry) => entry.phase === 'D')
+  const vfEntries = agentLog.filter((entry) => entry.phase === 'VF')
 
   let startEntry: AgentLogEntry | null = null
   const retries: RetryEntry[] = []
@@ -23,15 +23,15 @@ function extractPhaseDData(agentLog: AgentLogEntry[]): {
   let errorEntry: AgentLogEntry | null = null
   let retryCount = 0
 
-  for (const entry of phaseDEntries) {
+  for (const entry of vfEntries) {
     if (entry.action === 'start') {
       startEntry = entry
-    } else if (entry.action === 'retry') {
+    } else if (entry.action === 'fix' || entry.action === 'retry') {
       retryCount += 1
       retries.push({ index: retryCount, content: entry.content })
     } else if (entry.action === 'complete') {
       completeEntry = entry
-    } else if (entry.action === 'error') {
+    } else if (entry.action === 'error' || entry.action === 'escalate') {
       errorEntry = entry
     }
   }
@@ -40,23 +40,23 @@ function extractPhaseDData(agentLog: AgentLogEntry[]): {
 }
 
 export function DebugLog({ agentLog }: DebugLogProps) {
-  const phaseDEntries = agentLog.filter((entry) => entry.phase === 'D')
+  const vfEntries = agentLog.filter((entry) => entry.phase === 'VF')
 
-  if (phaseDEntries.length === 0) return null
+  if (vfEntries.length === 0) return null
 
-  const { startEntry, retries, completeEntry, errorEntry } = extractPhaseDData(agentLog)
+  const { startEntry, retries, completeEntry, errorEntry } = extractVerifyFixData(agentLog)
 
   const hasSuccess = completeEntry !== null
   const hasError = errorEntry !== null
 
   return (
-    <section aria-label="自律デバッグログ" className="rounded-lg border border-gray-700 bg-gray-900 p-4">
+    <section aria-label="検証・修正ログ" className="rounded-lg border border-gray-700 bg-gray-900 p-4">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium text-gray-400 bg-gray-800 border border-gray-600 rounded px-1.5 py-0.5">
-            Phase D
+            VF
           </span>
-          <h2 className="text-sm font-bold text-gray-200">自律デバッグ</h2>
+          <h2 className="text-sm font-bold text-gray-200">検証・修正</h2>
         </div>
         {hasSuccess && (
           <span className="text-green-400 text-xs font-medium">成功</span>
@@ -79,7 +79,7 @@ export function DebugLog({ agentLog }: DebugLogProps) {
                   リトライ {retry.index}:
                 </p>
                 <p className="text-xs text-gray-400 font-mono break-all">
-                  エラー: {retry.content}
+                  {retry.content}
                 </p>
               </li>
             ))}

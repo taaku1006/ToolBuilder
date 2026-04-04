@@ -28,9 +28,9 @@ function makeFetchResponse(stream: ReadableStream<Uint8Array>, contentType = 'te
 }
 
 const mockAgentLog: AgentLogEntry = {
-  phase: 'A',
+  phase: 'U',
   action: 'start',
-  content: 'Excel構造を分析中...',
+  content: 'タスクとデータを分析中',
   timestamp: '2024-01-01T00:00:00Z',
 }
 
@@ -139,7 +139,7 @@ describe('useSSE', () => {
   it('calls onEvent for each agent log SSE event', async () => {
     const sseLines = [
       `data: ${JSON.stringify(mockAgentLog)}\n\n`,
-      `data: ${JSON.stringify({ ...mockAgentLog, phase: 'B', action: 'done', content: '完了' })}\n\n`,
+      `data: ${JSON.stringify({ ...mockAgentLog, phase: 'G', action: 'complete', content: '完了' })}\n\n`,
     ]
     const stream = buildSSEStream(sseLines)
     mockFetch.mockResolvedValue(makeFetchResponse(stream))
@@ -159,7 +159,7 @@ describe('useSSE', () => {
 
     expect(onEvent).toHaveBeenCalledWith(mockAgentLog)
     expect(onEvent).toHaveBeenCalledWith(
-      expect.objectContaining({ phase: 'B', action: 'done' })
+      expect.objectContaining({ phase: 'G', action: 'complete' })
     )
   })
 

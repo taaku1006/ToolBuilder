@@ -34,37 +34,27 @@ function PhaseDot({ active, color }: { active: boolean; color: string }) {
 }
 
 const PHASE_DOT_COLORS: Record<string, string> = {
-  A: 'bg-blue-400',
-  B: 'bg-purple-400',
-  P: 'bg-yellow-400',
-  C: 'bg-green-400',
-  D: 'bg-yellow-400',
-  F: 'bg-pink-400',
-  G: 'bg-violet-400',
+  U: 'bg-blue-400',
+  G: 'bg-green-400',
+  VF: 'bg-yellow-400',
+  L: 'bg-teal-400',
+  M1E_Orchestrator: 'bg-amber-400',
+  M1E_Coder: 'bg-green-400',
+  M1E_Terminal: 'bg-cyan-400',
 }
 
-const TABLE_PHASES = ['A', 'B', 'P', 'C', 'D', 'G'] as const
+const TABLE_PHASES = ['U', 'G', 'VF', 'L'] as const
 
-function hasPhase(a: Architecture, phase: string): boolean {
-  if (!a.pipeline) return a.phases.includes(phase)
-  const p = a.pipeline as unknown as Record<string, unknown>
-  switch (phase) {
-    case 'A': return a.pipeline.explore
-    case 'B': return a.pipeline.reflect
-    case 'P': return a.pipeline.decompose
-    case 'C': return true
-    case 'D': return true
-    case 'F': return a.pipeline.eval_debug
-    case 'G': return p.llm_eval_debug === true
-    default: return false
+function getArchType(a: Architecture): string {
+  if (a.architecture_type === 'magentic_one_embed' || a.architecture_type === 'magentic_one_pkg') {
+    return 'MagenticOne'
   }
+  return 'v2'
 }
 
-function getFStrategy(a: Architecture): string {
-  if (!a.pipeline) return a.phases.includes('F') ? 'on' : '-'
-  if (!a.pipeline.eval_debug) return '-'
-  if (a.pipeline.eval_retry_strategy === 'none') return 'none'
-  return a.pipeline.eval_retry_strategy
+function getMemoryEnabled(a: Architecture): boolean {
+  const v2 = (a as unknown as Record<string, unknown>).v2_config as Record<string, unknown> | null
+  return (v2?.memory_enabled as boolean) ?? true
 }
 
 function getRetryLimit(a: Architecture): number {
@@ -89,7 +79,8 @@ function ArchTableRow({
   colSpan,
 }: ArchTableRowProps) {
   const isDetailOpen = detailArchId === arch.id
-  const fStrategy = getFStrategy(arch)
+  const archType = getArchType(arch)
+  const memoryEnabled = getMemoryEnabled(arch)
 
   return (
     <>
@@ -109,17 +100,9 @@ function ArchTableRow({
         <td className="py-2 px-2 font-mono text-xs text-gray-200 whitespace-nowrap">{arch.id}</td>
         <td className="py-2 px-2 text-xs text-gray-400 max-w-[200px] truncate">{arch.description}</td>
         <td className="py-2 px-2 text-xs text-gray-500 font-mono whitespace-nowrap">{arch.model}</td>
-        {TABLE_PHASES.map((p) => (
-          <td key={p} className="py-2 px-1 text-center">
-            <PhaseDot active={hasPhase(arch, p)} color={PHASE_DOT_COLORS[p] ?? 'bg-gray-400'} />
-          </td>
-        ))}
-        <td className="py-2 px-2 text-center text-xs font-mono">
-          {fStrategy === '-' ? (
-            <span className="text-gray-700">-</span>
-          ) : (
-            <span className="text-pink-400">{fStrategy}</span>
-          )}
+        <td className="py-2 px-2 text-center text-xs font-mono text-gray-400">{archType}</td>
+        <td className="py-2 px-2 text-center">
+          <PhaseDot active={memoryEnabled} color="bg-teal-400" />
         </td>
         <td className="py-2 px-2 text-center text-xs font-mono text-gray-400">{getRetryLimit(arch)}</td>
         <td className="py-2 px-1 text-center" onClick={(e) => e.stopPropagation()}>
@@ -226,8 +209,8 @@ export function ArchitectureTable({
   }
 
   const groups = groupArchitectures(archs)
-  // Total columns: checkbox + ID + Desc + Model + 6 phases + F strategy + Retry + Detail = 13
-  const colSpan = 13
+  // Total columns: checkbox + ID + Desc + Model + Type + Memory + Retry + Detail = 8
+  const colSpan = 8
 
   return (
     <div className="overflow-x-auto">
@@ -238,10 +221,8 @@ export function ArchitectureTable({
             <th className="text-left py-2 px-2 text-gray-500 text-xs">ID</th>
             <th className="text-left py-2 px-2 text-gray-500 text-xs">Description</th>
             <th className="text-left py-2 px-2 text-gray-500 text-xs">Model</th>
-            {TABLE_PHASES.map((p) => (
-              <th key={p} className="text-center py-2 px-1 text-gray-500 text-xs w-8">{p}</th>
-            ))}
-            <th className="text-center py-2 px-2 text-gray-500 text-xs">F strategy</th>
+            <th className="text-center py-2 px-2 text-gray-500 text-xs">Type</th>
+            <th className="text-center py-2 px-2 text-gray-500 text-xs">Memory</th>
             <th className="text-center py-2 px-2 text-gray-500 text-xs">Retry</th>
             <th className="text-center py-2 px-1 text-gray-500 text-xs w-12" />
           </tr>

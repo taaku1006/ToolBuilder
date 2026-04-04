@@ -147,21 +147,9 @@ export const useGenerateStore = create<GenerateState>((set, get) => ({
               } catch {
                 // History save failure is non-critical
               }
-            } else if (parsed.phase === 'E' && parsed.action === 'complete') {
-              // Phase E: auto-save skill if suggested
+            } else if (parsed.phase === 'L' && parsed.action === 'complete') {
+              // Learn phase complete — no action needed, logged for SSE display
               try {
-                const payload = JSON.parse(parsed.content) as Record<string, unknown>
-                if (payload.suggest_save) {
-                  await createSkill({
-                    title: (payload.task_summary as string) || task,
-                    tags: [],
-                    python_code: (payload.python_code as string) || '',
-                    task_summary: (payload.task_summary as string) || null,
-                  })
-                  // Refresh skills list in sidebar
-                  void useSkillsStore.getState().fetchSkills()
-                }
-              } catch {
                 // Skill save failure is non-critical
               }
               set((state) => ({ agentLog: [...state.agentLog, parsed] }))

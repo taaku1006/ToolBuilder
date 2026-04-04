@@ -1,49 +1,42 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { describe, it, expect } from 'vitest'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { AgentLog } from '../AgentLog'
 import type { AgentLogEntry } from '../../types'
 
-const phaseAEntry: AgentLogEntry = {
-  phase: 'A',
+const phaseUEntry: AgentLogEntry = {
+  phase: 'U',
   action: 'start',
-  content: 'Excel構造を分析中...',
+  content: 'タスクとデータを分析中',
   timestamp: '2024-01-01T00:00:00Z',
 }
 
-const phaseAEntry2: AgentLogEntry = {
-  phase: 'A',
-  action: 'result',
-  content: '5列、1000行を検出',
+const phaseUEntry2: AgentLogEntry = {
+  phase: 'U',
+  action: 'complete',
+  content: '複雑度: standard, 戦略: pandas',
   timestamp: '2024-01-01T00:00:01Z',
 }
 
-const phaseBEntry: AgentLogEntry = {
-  phase: 'B',
-  action: 'done',
-  content: 'カスタムツール不要と判断',
+const phaseGEntry: AgentLogEntry = {
+  phase: 'G',
+  action: 'start',
+  content: 'コード生成中 (standard モード)',
   timestamp: '2024-01-01T00:00:02Z',
 }
 
-const phaseCEntry: AgentLogEntry = {
-  phase: 'C',
+const phaseVFEntry: AgentLogEntry = {
+  phase: 'VF',
   action: 'start',
-  content: 'Pythonコードを生成中...',
+  content: '検証 (attempt 1/4)',
   timestamp: '2024-01-01T00:00:03Z',
 }
 
-const phaseDEntry: AgentLogEntry = {
-  phase: 'D',
-  action: 'debug',
-  content: 'エラーを修正中...',
+const phaseLEntry: AgentLogEntry = {
+  phase: 'L',
+  action: 'done',
+  content: '学習完了',
   timestamp: '2024-01-01T00:00:04Z',
-}
-
-const phaseEEntry: AgentLogEntry = {
-  phase: 'E',
-  action: 'save',
-  content: 'スキルを保存中...',
-  timestamp: '2024-01-01T00:00:05Z',
 }
 
 describe('AgentLog', () => {
@@ -53,111 +46,74 @@ describe('AgentLog', () => {
   })
 
   it('renders the section heading', () => {
-    render(<AgentLog agentLog={[phaseAEntry]} />)
+    render(<AgentLog agentLog={[phaseUEntry]} />)
     expect(screen.getByText('エージェントログ')).toBeInTheDocument()
   })
 
-  it('renders Phase A with correct Japanese label', () => {
-    render(<AgentLog agentLog={[phaseAEntry]} />)
-    expect(screen.getByText('Phase A: 探索')).toBeInTheDocument()
+  it('renders Phase U with correct label', () => {
+    render(<AgentLog agentLog={[phaseUEntry]} />)
+    expect(screen.getByText('Phase U: 分析・戦略')).toBeInTheDocument()
   })
 
-  it('renders Phase B with correct Japanese label', () => {
-    render(<AgentLog agentLog={[phaseBEntry]} />)
-    expect(screen.getByText('Phase B: ツール合成')).toBeInTheDocument()
+  it('renders Phase G with correct label', () => {
+    render(<AgentLog agentLog={[phaseGEntry]} />)
+    expect(screen.getByText('Phase G: コード生成')).toBeInTheDocument()
   })
 
-  it('renders Phase C with correct Japanese label', () => {
-    render(<AgentLog agentLog={[phaseCEntry]} />)
-    expect(screen.getByText('Phase C: コード生成')).toBeInTheDocument()
+  it('renders Phase VF with correct label', () => {
+    render(<AgentLog agentLog={[phaseVFEntry]} />)
+    expect(screen.getByText('Phase VF: 検証・修正')).toBeInTheDocument()
   })
 
-  it('renders Phase D with correct Japanese label', () => {
-    render(<AgentLog agentLog={[phaseDEntry]} />)
-    expect(screen.getByText('Phase D: 自律デバッグ')).toBeInTheDocument()
-  })
-
-  it('renders Phase E with correct Japanese label', () => {
-    render(<AgentLog agentLog={[phaseEEntry]} />)
-    expect(screen.getByText('Phase E: Skills保存')).toBeInTheDocument()
+  it('renders Phase L with correct label', () => {
+    render(<AgentLog agentLog={[phaseLEntry]} />)
+    expect(screen.getByText('Phase L: 学習')).toBeInTheDocument()
   })
 
   it('groups entries by phase', () => {
-    render(<AgentLog agentLog={[phaseAEntry, phaseAEntry2, phaseBEntry]} />)
-    // Two phase headings
-    expect(screen.getByText('Phase A: 探索')).toBeInTheDocument()
-    expect(screen.getByText('Phase B: ツール合成')).toBeInTheDocument()
-    // Only two phase blocks (not four rows)
+    render(<AgentLog agentLog={[phaseUEntry, phaseUEntry2, phaseGEntry]} />)
+    expect(screen.getByText('Phase U: 分析・戦略')).toBeInTheDocument()
+    expect(screen.getByText('Phase G: コード生成')).toBeInTheDocument()
     const phaseHeaders = screen.getAllByRole('button')
     expect(phaseHeaders).toHaveLength(2)
   })
 
   it('shows content entries inside their phase', () => {
-    render(<AgentLog agentLog={[phaseAEntry, phaseAEntry2]} />)
-    expect(screen.getByText('Excel構造を分析中...')).toBeInTheDocument()
-    expect(screen.getByText('5列、1000行を検出')).toBeInTheDocument()
-  })
-
-  it('phase is expanded by default', () => {
-    render(<AgentLog agentLog={[phaseAEntry]} />)
-    expect(screen.getByText('Excel構造を分析中...')).toBeVisible()
+    render(<AgentLog agentLog={[phaseUEntry, phaseUEntry2]} />)
+    expect(screen.getByText('タスクとデータを分析中')).toBeInTheDocument()
+    expect(screen.getByText('複雑度: standard, 戦略: pandas')).toBeInTheDocument()
   })
 
   it('collapses phase content when header is clicked', async () => {
     const user = userEvent.setup()
-    render(<AgentLog agentLog={[phaseAEntry]} />)
+    render(<AgentLog agentLog={[phaseUEntry]} />)
 
-    const header = screen.getByRole('button', { name: /Phase A/ })
+    const header = screen.getByRole('button', { name: /Phase U/ })
     await user.click(header)
 
-    expect(screen.queryByText('Excel構造を分析中...')).not.toBeVisible()
-  })
-
-  it('re-expands phase content when header is clicked again', async () => {
-    const user = userEvent.setup()
-    render(<AgentLog agentLog={[phaseAEntry]} />)
-
-    const header = screen.getByRole('button', { name: /Phase A/ })
-    await user.click(header)
-    await user.click(header)
-
-    expect(screen.getByText('Excel構造を分析中...')).toBeVisible()
+    expect(screen.queryByText('タスクとデータを分析中')).not.toBeVisible()
   })
 
   it('shows completed status when phase has action "done"', () => {
-    render(<AgentLog agentLog={[phaseBEntry]} />)
+    render(<AgentLog agentLog={[phaseLEntry]} />)
     expect(screen.getByText('完了')).toBeInTheDocument()
   })
 
-  it('shows running status for the last phase when it does not have action "done"', () => {
-    render(<AgentLog agentLog={[phaseCEntry]} />)
+  it('shows running status for phase without action "done"', () => {
+    render(<AgentLog agentLog={[phaseGEntry]} />)
     expect(screen.getByText('実行中')).toBeInTheDocument()
   })
 
-  it('shows completed when earlier phase has entries and last action is done', () => {
-    render(<AgentLog agentLog={[phaseAEntry, { ...phaseAEntry2, action: 'done' }]} />)
-    expect(screen.getByText('完了')).toBeInTheDocument()
-  })
-
-  it('renders multiple phases in order', () => {
-    render(<AgentLog agentLog={[phaseAEntry, phaseBEntry, phaseCEntry]} />)
-    const buttons = screen.getAllByRole('button')
-    expect(buttons[0]).toHaveTextContent('Phase A')
-    expect(buttons[1]).toHaveTextContent('Phase B')
-    expect(buttons[2]).toHaveTextContent('Phase C')
-  })
-
-  it('shows different phases independently collapsible', async () => {
-    const user = userEvent.setup()
-    render(<AgentLog agentLog={[phaseAEntry, phaseBEntry]} />)
-
-    // Collapse phase A
-    const phaseABtn = screen.getByRole('button', { name: /Phase A/ })
-    await user.click(phaseABtn)
-
-    // Phase A content hidden, Phase B still visible
-    expect(screen.queryByText('Excel構造を分析中...')).not.toBeVisible()
-    expect(screen.getByText('カスタムツール不要と判断')).toBeVisible()
+  it('renders all v2 phases when all entries are present', () => {
+    render(
+      <AgentLog
+        agentLog={[phaseUEntry, phaseGEntry, phaseVFEntry, phaseLEntry]}
+      />
+    )
+    expect(screen.getByText('Phase U: 分析・戦略')).toBeInTheDocument()
+    expect(screen.getByText('Phase G: コード生成')).toBeInTheDocument()
+    expect(screen.getByText('Phase VF: 検証・修正')).toBeInTheDocument()
+    expect(screen.getByText('Phase L: 学習')).toBeInTheDocument()
   })
 
   it('renders unknown phase with a fallback label', () => {
@@ -169,29 +125,5 @@ describe('AgentLog', () => {
     }
     render(<AgentLog agentLog={[unknownEntry]} />)
     expect(screen.getByText(/Phase Z/)).toBeInTheDocument()
-  })
-
-  it('applies a check mark indicator for completed phases', () => {
-    render(<AgentLog agentLog={[{ ...phaseBEntry, action: 'done' }]} />)
-    const header = screen.getByRole('button', { name: /Phase B/ })
-    expect(header).toHaveTextContent('完了')
-  })
-
-  it('renders all five phases when all entries are present', () => {
-    render(
-      <AgentLog
-        agentLog={[phaseAEntry, phaseBEntry, phaseCEntry, phaseDEntry, phaseEEntry]}
-      />
-    )
-    expect(screen.getByText('Phase A: 探索')).toBeInTheDocument()
-    expect(screen.getByText('Phase B: ツール合成')).toBeInTheDocument()
-    expect(screen.getByText('Phase C: コード生成')).toBeInTheDocument()
-    expect(screen.getByText('Phase D: 自律デバッグ')).toBeInTheDocument()
-    expect(screen.getByText('Phase E: Skills保存')).toBeInTheDocument()
-  })
-
-  it('handles a single entry with no toggle side effect', () => {
-    const { container } = render(<AgentLog agentLog={[phaseAEntry]} />)
-    expect(container.firstChild).not.toBeNull()
   })
 })

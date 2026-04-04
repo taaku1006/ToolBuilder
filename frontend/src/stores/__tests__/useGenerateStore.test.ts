@@ -28,9 +28,9 @@ const mockResponse: GenerateResponse = {
 }
 
 const mockLogEntry: AgentLogEntry = {
-  phase: 'A',
+  phase: 'U',
   action: 'start',
-  content: 'Excel構造を分析中...',
+  content: 'タスクとデータを分析中',
   timestamp: '2024-01-01T00:00:00Z',
 }
 
