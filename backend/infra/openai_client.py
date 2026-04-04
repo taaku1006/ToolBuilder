@@ -50,34 +50,50 @@ class OpenAIClient:
         self.completion_tokens: int = 0
         self.api_calls: int = 0
 
-    def chat(self, messages: list[dict]) -> str:
+    def chat(
+        self,
+        messages: list[dict],
+        *,
+        model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> str:
         """Multi-turn chat with arbitrary message history.
 
         Args:
             messages: List of dicts with "role" and "content" keys, following
                       the OpenAI messages format directly.
+            model: Override the default model for this call.
+            temperature: Override the default temperature for this call.
+            max_tokens: Set max_tokens for this call (omitted when None).
 
         Returns:
             The assistant's reply content (raw, no code-fence stripping).
         """
+        use_model = model or self._model
+        use_temperature = temperature if temperature is not None else 0.2
+
         start = time.monotonic()
+        kwargs: dict = {
+            "model": use_model,
+            "messages": messages,
+            "temperature": use_temperature,
+        }
+        if max_tokens is not None:
+            kwargs["max_tokens"] = max_tokens
         try:
-            response = self._client.chat.completions.create(
-                model=self._model,
-                messages=messages,
-                temperature=0.2,
-            )
+            response = self._client.chat.completions.create(**kwargs)
         except Exception:
             duration_ms = int((time.monotonic() - start) * 1000)
             logger.exception(
                 "OpenAI API call (chat) failed",
-                extra={"model": self._model, "duration_ms": duration_ms},
+                extra={"model": use_model, "duration_ms": duration_ms},
             )
             raise
 
         duration_ms = int((time.monotonic() - start) * 1000)
         usage = response.usage
-        extra: dict[str, object] = {"model": self._model, "duration_ms": duration_ms}
+        extra: dict[str, object] = {"model": use_model, "duration_ms": duration_ms}
         self.api_calls += 1
         if usage is not None:
             extra["prompt_tokens"] = usage.prompt_tokens
@@ -90,33 +106,47 @@ class OpenAIClient:
         logger.info("OpenAI API call (chat) completed", extra=extra)
         return response.choices[0].message.content or ""
 
-    def generate_code(self, system_prompt: str, user_prompt: str) -> str:
+    def generate_code(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        *,
+        model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> str:
+        use_model = model or self._model
+        use_temperature = temperature if temperature is not None else 0.2
+
         logger.info(
             "OpenAI API call started",
-            extra={"model": self._model},
+            extra={"model": use_model},
         )
         start = time.monotonic()
+        kwargs: dict = {
+            "model": use_model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": use_temperature,
+        }
+        if max_tokens is not None:
+            kwargs["max_tokens"] = max_tokens
         try:
-            response = self._client.chat.completions.create(
-                model=self._model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                temperature=0.2,
-            )
+            response = self._client.chat.completions.create(**kwargs)
         except Exception:
             duration_ms = int((time.monotonic() - start) * 1000)
             logger.exception(
                 "OpenAI API call failed",
-                extra={"model": self._model, "duration_ms": duration_ms},
+                extra={"model": use_model, "duration_ms": duration_ms},
             )
             raise
 
         duration_ms = int((time.monotonic() - start) * 1000)
         usage = response.usage
         extra: dict[str, object] = {
-            "model": self._model,
+            "model": use_model,
             "duration_ms": duration_ms,
         }
         self.api_calls += 1

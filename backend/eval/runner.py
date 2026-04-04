@@ -136,7 +136,17 @@ class EvalRunner:
         try:
             arch_type = arch.architecture_type
 
-            if arch_type == "magentic_one_pkg":
+            if arch_type == "v2_adaptive":
+                from pipeline.v2 import orchestrate_v2
+                _stream = orchestrate_v2(
+                    task=case.task,
+                    file_id=file_id,
+                    settings=settings,
+                    expected_file_path=case.expected_file_path,
+                    cancel_check=self._cancel_check,
+                    rubric=case.rubric,
+                )
+            elif arch_type == "magentic_one_pkg":
                 from pipeline.magentic_one import run_magentic_one_pkg
                 _stream = run_magentic_one_pkg(
                     task=case.task,

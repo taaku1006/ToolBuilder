@@ -1,0 +1,35 @@
+{
+  "id": "v2_adaptive",
+  "architecture_type": "v2_adaptive",
+  "model": "gpt-4o",
+  "description": "Adaptive Pipeline v2: 4-stage architecture with unified verify-fix loop",
+  "pipeline": {
+    "explore": false,
+    "reflect": false,
+    "decompose": false,
+    "debug_retry_limit": 0,
+    "eval_debug": false,
+    "llm_eval_debug": false,
+    "skills": false
+  },
+  "v2_config": {
+    "stage_models": {
+      "understand": "gpt-4o-mini",
+      "strategize": "gpt-4o-mini",
+      "generate": "gpt-4o",
+      "generate_step": "gpt-4o",
+      "verify_llm": "gpt-4o-mini",
+      "fix": "gpt-4o"
+    },
+    "max_attempts": {
+      "simple": 2,
+      "standard": 4,
+      "complex": 6
+    },
+    "max_replan": 2,
+    "quality_threshold": 0.85,
+    "semantic_threshold": 7.0,
+    "pass_threshold": 0.75,
+    "memory_enabled": true
+  }
+}

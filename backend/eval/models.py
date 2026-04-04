@@ -48,13 +48,14 @@ class ArchitectureConfig:
     """Defines an agent architecture variant for evaluation."""
 
     id: str
-    architecture_type: str = "toolbuilder"  # "toolbuilder" | "magentic_one_pkg" | "magentic_one_embed"
+    architecture_type: str = "toolbuilder"  # "toolbuilder" | "magentic_one_pkg" | "magentic_one_embed" | "v2_adaptive"
     phases: list[str] = field(default_factory=lambda: ["A", "B", "P", "C", "D", "F", "G", "E"])
     pipeline: PipelineConfig | None = None
     model: str = "gpt-4o"
     debug_retry_limit: int = 3
     temperature: float = 0.2
     description: str = ""
+    v2_config: dict | None = None  # v2-specific: stage_models, max_attempts, thresholds, etc.
 
     def to_settings_overrides(self) -> dict:
         """Return a dict of Settings field overrides derived from this config."""
@@ -206,6 +207,7 @@ def load_architecture(path: Path) -> ArchitectureConfig:
         debug_retry_limit=data.get("debug_retry_limit", 3),
         temperature=data.get("temperature", 0.2),
         description=data.get("description", ""),
+        v2_config=data.get("v2_config"),
     )
 
 
