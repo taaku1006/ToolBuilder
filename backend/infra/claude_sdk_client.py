@@ -1,0 +1,216 @@
+"""Claude Agent SDK-based LLM client.
+
+Uses Claude Code OAuth tokens (subscription-based) instead of API keys.
+Same interface as LLMClient for seamless swapping via client_factory.
+
+Model strings: "claude-sdk/claude-sonnet-4-6" → SDK receives "claude-sonnet-4-6"
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import os
+import re
+import time
+
+from core.config import Settings
+
+logger = logging.getLogger(__name__)
+
+_CODE_FENCE_RE = re.compile(r"^```(?:\w+)?\s*\n?(.*?)\n?\s*```$", re.DOTALL)
+
+
+def _strip_code_fence(text: str) -> str:
+    stripped = text.strip()
+    m = _CODE_FENCE_RE.match(stripped)
+    return m.group(1).strip() if m else stripped
+
+
+def _strip_prefix(model: str) -> str:
+    """Remove 'claude-sdk/' prefix from model string."""
+    if model.startswith("claude-sdk/"):
+        return model[len("claude-sdk/"):]
+    return model
+
+
+class ClaudeSDKClient:
+    """LLM client using Claude Agent SDK with OAuth token auth.
+
+    Implements the same interface as LLMClient (chat, generate_code, token tracking).
+    """
+
+    def __init__(self, settings: Settings) -> None:
+        self._model = _strip_prefix(settings.active_model)
+        self._oauth_token = (
+            getattr(settings, "claude_oauth_token", "")
+            or os.environ.get("CLAUDE_CODE_OAUTH_TOKEN", "")
+        )
+
+        # Token tracking (same as LLMClient)
+        self.total_tokens: int = 0
+        self.prompt_tokens: int = 0
+        self.completion_tokens: int = 0
+        self.api_calls: int = 0
+
+        if self._oauth_token:
+            os.environ["CLAUDE_CODE_OAUTH_TOKEN"] = self._oauth_token
+
+        logger.info(
+            "ClaudeSDKClient initialized",
+            extra={"model": self._model, "has_token": bool(self._oauth_token)},
+        )
+
+    def chat(
+        self,
+        messages: list[dict],
+        *,
+        model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> str:
+        """Multi-turn chat — same signature as LLMClient.chat()."""
+        use_model = _strip_prefix(model) if model else self._model
+
+        start = time.monotonic()
+        try:
+            result = self._call_sdk(
+                messages,
+                model=use_model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+        except Exception:
+            duration_ms = int((time.monotonic() - start) * 1000)
+            logger.exception(
+                "Claude SDK call (chat) failed",
+                extra={"model": use_model, "duration_ms": duration_ms},
+            )
+            raise
+
+        duration_ms = int((time.monotonic() - start) * 1000)
+        self.api_calls += 1
+        logger.info(
+            "Claude SDK call (chat) completed",
+            extra={"model": use_model, "duration_ms": duration_ms},
+        )
+        return result
+
+    def generate_code(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        *,
+        model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> str:
+        """Code generation — same signature as LLMClient.generate_code()."""
+        use_model = _strip_prefix(model) if model else self._model
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        start = time.monotonic()
+        try:
+            result = self._call_sdk(
+                messages,
+                model=use_model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+        except Exception:
+            duration_ms = int((time.monotonic() - start) * 1000)
+            logger.exception(
+                "Claude SDK call (generate_code) failed",
+                extra={"model": use_model, "duration_ms": duration_ms},
+            )
+            raise
+
+        duration_ms = int((time.monotonic() - start) * 1000)
+        self.api_calls += 1
+        logger.info(
+            "Claude SDK call (generate_code) completed",
+            extra={"model": use_model, "duration_ms": duration_ms},
+        )
+        return _strip_code_fence(result)
+
+    def _call_sdk(
+        self,
+        messages: list[dict],
+        *,
+        model: str,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> str:
+        """Call Claude Agent SDK and collect response text.
+
+        Uses async client internally but exposes sync interface
+        to match LLMClient.
+        """
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Already in async context — use nest_asyncio or thread
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    return pool.submit(
+                        asyncio.run,
+                        self._call_sdk_async(messages, model=model, temperature=temperature, max_tokens=max_tokens),
+                    ).result()
+            else:
+                return loop.run_until_complete(
+                    self._call_sdk_async(messages, model=model, temperature=temperature, max_tokens=max_tokens)
+                )
+        except RuntimeError:
+            return asyncio.run(
+                self._call_sdk_async(messages, model=model, temperature=temperature, max_tokens=max_tokens)
+            )
+
+    async def _call_sdk_async(
+        self,
+        messages: list[dict],
+        *,
+        model: str,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> str:
+        """Async implementation using Claude Agent SDK."""
+        from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient as SDKClient
+
+        # Build prompt from messages
+        system_prompt = ""
+        user_messages: list[str] = []
+        for msg in messages:
+            if msg["role"] == "system":
+                system_prompt = msg["content"]
+            else:
+                user_messages.append(msg["content"])
+
+        prompt = "\n\n".join(user_messages)
+
+        # Build SDK options
+        options_kwargs: dict = {
+            "model": model,
+            "max_turns": 1,
+        }
+        if system_prompt:
+            options_kwargs["system_prompt"] = system_prompt
+        if max_tokens is not None:
+            options_kwargs["max_thinking_tokens"] = 0
+
+        client = SDKClient(options=ClaudeAgentOptions(**options_kwargs))
+
+        response_text = ""
+        async with client:
+            await client.query(prompt)
+            async for msg in client.receive_response():
+                msg_type = type(msg).__name__
+                if msg_type == "AssistantMessage":
+                    for content in msg.content:
+                        if hasattr(content, "text"):
+                            response_text += content.text
+
+        return response_text

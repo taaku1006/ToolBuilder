@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     gemini_api_key: str = ""
 
+    # Claude Agent SDK (subscription-based, OAuth token)
+    claude_oauth_token: str = ""  # env: CLAUDE_CODE_OAUTH_TOKEN
+
     # Embedding model (empty = auto-select based on available keys)
     embedding_model: str = ""
 

@@ -26,6 +26,10 @@ MODEL_PRICING: dict[str, tuple[float, float]] = {
     "anthropic/claude-opus-4-6":      (15.00, 75.00),
     "anthropic/claude-sonnet-4-6":    (3.00,  15.00),
     "anthropic/claude-haiku-4-5":     (0.80,   4.00),
+    # Claude SDK (subscription-based, cost = $0 for usage tracking)
+    "claude-sdk/claude-opus-4-6":     (0.00,   0.00),
+    "claude-sdk/claude-sonnet-4-6":   (0.00,   0.00),
+    "claude-sdk/claude-haiku-4-5":    (0.00,   0.00),
     # Google Gemini
     "gemini/gemini-2.5-pro":          (1.25,  10.00),
     "gemini/gemini-2.5-flash":        (0.15,   0.60),

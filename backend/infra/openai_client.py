@@ -1,7 +1,17 @@
-"""Backward-compatible re-export. Use infra.llm_client directly."""
+"""Backward-compatible wrapper. Delegates to client_factory for provider routing."""
 
-from infra.llm_client import LLMClient
+from infra.client_factory import create_llm_client
 
-OpenAIClient = LLMClient
 
-__all__ = ["LLMClient", "OpenAIClient"]
+class OpenAIClient:
+    """Backward-compatible wrapper that delegates to the appropriate LLM backend.
+
+    Usage: client = OpenAIClient(settings)
+    The returned object has chat(), generate_code(), and token tracking.
+    """
+
+    def __new__(cls, settings):
+        return create_llm_client(settings)
+
+
+__all__ = ["OpenAIClient"]

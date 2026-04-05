@@ -28,6 +28,8 @@ class ModelsResponse(BaseModel):
 
 
 def _detect_provider(model_id: str) -> str:
+    if model_id.startswith("claude-sdk/"):
+        return "claude-sdk"
     if model_id.startswith("anthropic/"):
         return "anthropic"
     if model_id.startswith("gemini/") or model_id.startswith("vertex_ai/"):
@@ -51,6 +53,8 @@ def _available_models(settings: Settings) -> list[ModelInfo]:
         if provider == "anthropic" and not settings.anthropic_api_key:
             continue
         if provider == "google" and not settings.gemini_api_key:
+            continue
+        if provider == "claude-sdk" and not settings.claude_oauth_token:
             continue
         # Ollama is always available (local)
         result.append(
