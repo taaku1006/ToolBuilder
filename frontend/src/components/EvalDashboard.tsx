@@ -148,22 +148,26 @@ export function EvalDashboard() {
   const isRunning = runStatus?.status === 'running'
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
-      <h2 className="text-xl font-semibold text-white">Agent Architecture Eval</h2>
+    <div className="px-4 py-4 space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-gray-200 font-mono">Eval</h2>
+      </div>
 
       {displayError && (
-        <div className="bg-red-950 border border-red-800 text-red-300 rounded-lg px-4 py-3 text-sm">
+        <div className="bg-red-950/50 border border-red-900 text-red-300 rounded px-3 py-2 text-xs font-mono">
           {displayError}
         </div>
       )}
 
-      <div className="bg-gray-900 rounded-lg p-4 space-y-3">
-        <h3 className="text-sm font-medium text-gray-300">
-          Architectures
-          <span className="text-gray-500 ml-2 font-normal">
-            ({selectedArchs.size === 0 ? 'all' : selectedArchs.size} selected)
+      <div className="border border-gray-800 rounded-lg bg-gray-900/50 p-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs uppercase tracking-wide text-gray-500">
+            Architectures
+          </h3>
+          <span className="text-[10px] text-gray-600 font-mono">
+            {selectedArchs.size === 0 ? 'all' : selectedArchs.size} selected
           </span>
-        </h3>
+        </div>
         <ArchitectureTable
           archs={archs}
           selectedArchs={selectedArchs}
@@ -181,20 +185,20 @@ export function EvalDashboard() {
         />
       </div>
 
-      <div className="bg-gray-900 rounded-lg p-4 space-y-3">
+      <div className="border border-gray-800 rounded-lg bg-gray-900/50 p-3 space-y-2">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-medium text-gray-300">
-            Test Cases
-            <span className="text-gray-500 ml-2 font-normal">
-              ({selectedCases.size === 0 ? 'all' : selectedCases.size} selected)
+          <div className="flex items-center gap-2">
+            <h3 className="text-xs uppercase tracking-wide text-gray-500">Test Cases</h3>
+            <span className="text-[10px] text-gray-600 font-mono">
+              {selectedCases.size === 0 ? 'all' : selectedCases.size} selected
             </span>
-          </h3>
+          </div>
           <button
             type="button"
             onClick={() => setShowAddCase((v) => !v)}
-            className="text-xs px-2.5 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors"
+            className="text-[10px] px-2 py-0.5 bg-gray-800 hover:bg-gray-700 text-gray-400 rounded transition-colors font-mono"
           >
-            {showAddCase ? 'Cancel' : '+ Add'}
+            {showAddCase ? 'cancel' : '+ add'}
           </button>
         </div>
 

@@ -15,16 +15,16 @@ export function SummaryTable({ report, archs }: SummaryTableProps) {
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+      <table className="w-full text-xs">
         <thead>
-          <tr className="border-b border-gray-700">
-            <th className="text-left py-2 px-3 text-gray-400">Architecture</th>
-            <th className="text-center py-2 px-3 text-gray-400">Success</th>
-            <th className="text-right py-2 px-3 text-gray-400">Avg Tokens</th>
-            <th className="text-right py-2 px-3 text-gray-400">Avg Cost</th>
-            <th className="text-right py-2 px-3 text-gray-400">Avg Time</th>
-            <th className="text-right py-2 px-3 text-gray-400">Avg Retries</th>
-            <th className="text-right py-2 px-3 text-gray-400">Runs</th>
+          <tr className="border-b border-gray-800">
+            <th className="text-left py-1.5 px-2 text-gray-500 font-normal uppercase tracking-wide text-[10px]">Architecture</th>
+            <th className="text-center py-1.5 px-2 text-gray-500 font-normal uppercase tracking-wide text-[10px]">Success</th>
+            <th className="text-right py-1.5 px-2 text-gray-500 font-normal uppercase tracking-wide text-[10px]">Tokens</th>
+            <th className="text-right py-1.5 px-2 text-gray-500 font-normal uppercase tracking-wide text-[10px]">Cost</th>
+            <th className="text-right py-1.5 px-2 text-gray-500 font-normal uppercase tracking-wide text-[10px]">Time</th>
+            <th className="text-right py-1.5 px-2 text-gray-500 font-normal uppercase tracking-wide text-[10px]">Retries</th>
+            <th className="text-right py-1.5 px-2 text-gray-500 font-normal uppercase tracking-wide text-[10px]">Runs</th>
           </tr>
         </thead>
         <tbody>
@@ -35,45 +35,38 @@ export function SummaryTable({ report, archs }: SummaryTableProps) {
             return (
               <tr
                 key={archId}
-                className={`border-b border-gray-800 ${isBest ? 'bg-green-950/30' : ''}`}
+                className={`border-b border-gray-800/50 ${isBest ? 'bg-green-950/20' : ''}`}
               >
-                <td className="py-2 px-3 max-w-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs text-gray-200">{archId}</span>
+                <td className="py-1.5 px-2 max-w-xs">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono text-gray-200">{archId}</span>
                     {isBest && (
-                      <span className="text-xs text-green-400">BEST</span>
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400" title="Best" />
                     )}
                   </div>
                   {arch && (
-                    <div className="mt-1">
-                      <div className="text-xs text-gray-500">{arch.description}</div>
-                      <div className="flex items-center gap-1 mt-1 flex-wrap">
-                        <PhaseTag phase="U" />
-                        <PhaseTag phase="G" />
-                        <PhaseTag phase="VF" />
-                        <PhaseTag phase="L" />
-                        <span className="text-xs text-gray-600 ml-1">{arch.model}</span>
-                      </div>
+                    <div className="mt-0.5 flex items-center gap-1.5">
+                      <span className="text-[10px] text-gray-600 font-mono">{arch.model}</span>
                     </div>
                   )}
                 </td>
-                <td className="py-2 px-3">
+                <td className="py-1.5 px-2">
                   <SuccessBar rate={row.success_rate} ciLow={row.ci_low} ciHigh={row.ci_high} />
                   <ErrorBreakdown breakdown={row.error_breakdown} />
                 </td>
-                <td className="text-right py-2 px-3 text-gray-300 font-mono text-xs">
+                <td className="text-right py-1.5 px-2 text-gray-400 font-mono">
                   {Math.round(row.avg_tokens).toLocaleString()}
                 </td>
-                <td className="text-right py-2 px-3 text-green-400 font-mono text-xs">
+                <td className="text-right py-1.5 px-2 text-green-400/80 font-mono">
                   ${row.avg_cost_usd?.toFixed(4) ?? '—'}
                 </td>
-                <td className="text-right py-2 px-3 text-gray-300 font-mono text-xs">
+                <td className="text-right py-1.5 px-2 text-gray-400 font-mono">
                   {(row.avg_duration_ms / 1000).toFixed(1)}s
                 </td>
-                <td className="text-right py-2 px-3 text-gray-300 font-mono text-xs">
+                <td className="text-right py-1.5 px-2 text-gray-400 font-mono">
                   {row.avg_retries.toFixed(1)}
                 </td>
-                <td className="text-right py-2 px-3 text-gray-300 font-mono text-xs">
+                <td className="text-right py-1.5 px-2 text-gray-400 font-mono">
                   {row.total_runs}
                 </td>
               </tr>
