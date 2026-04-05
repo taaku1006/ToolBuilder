@@ -239,8 +239,9 @@ def _memory_data_dir() -> Path:
 
 
 def _recall_memory(file_context) -> MemoryContext:
-    """Recall past patterns and gotchas from file-based memory."""
+    """Recall past patterns, gotchas, and strategy stats from file-based memory."""
     from memory.search import search_gotchas, search_patterns
+    from memory.store import MemoryStore
 
     data_dir = _memory_data_dir()
     if not data_dir.exists():
@@ -249,5 +250,6 @@ def _recall_memory(file_context) -> MemoryContext:
     feature_keys = file_context.get_feature_keys()
     patterns = search_patterns(data_dir, file_features=feature_keys)
     gotchas = search_gotchas(data_dir, file_features=feature_keys)
+    strategy_stats = MemoryStore(data_dir).get_strategy_stats()
 
-    return MemoryContext(patterns=patterns, gotchas=gotchas)
+    return MemoryContext(patterns=patterns, gotchas=gotchas, strategy_stats=strategy_stats)

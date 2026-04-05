@@ -119,6 +119,35 @@ class MemoryStore:
         self._save_json("session_log.json", log)
 
     # ------------------------------------------------------------------
+    # Strategy statistics (meta-learning)
+    # ------------------------------------------------------------------
+
+    def get_strategy_stats(self) -> dict[str, dict]:
+        """Aggregate success rate and avg attempts per strategy from session log."""
+        log = self.load_session_log()
+        buckets: dict[str, dict] = {}
+        for entry in log:
+            strategy = entry.get("strategy", "unknown")
+            if strategy not in buckets:
+                buckets[strategy] = {"total": 0, "passed": 0, "total_attempts": 0}
+            b = buckets[strategy]
+            b["total"] += 1
+            if entry.get("passed"):
+                b["passed"] += 1
+            b["total_attempts"] += entry.get("attempts", 0)
+
+        result: dict[str, dict] = {}
+        for strategy, b in buckets.items():
+            total = b["total"]
+            result[strategy] = {
+                "total": total,
+                "passed": b["passed"],
+                "success_rate": b["passed"] / total if total > 0 else 0.0,
+                "avg_attempts": b["total_attempts"] / total if total > 0 else 0.0,
+            }
+        return result
+
+    # ------------------------------------------------------------------
     # Internal I/O
     # ------------------------------------------------------------------
 

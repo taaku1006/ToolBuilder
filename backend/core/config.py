@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     gemini_api_key: str = ""
 
+    # Embedding model (empty = auto-select based on available keys)
+    embedding_model: str = ""
+
     # Legacy OpenAI-specific (used as fallback when llm_* is empty)
     openai_model: str = "gpt-4o"
 

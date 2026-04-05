@@ -150,11 +150,27 @@ class MemoryContext:
 
     patterns: list[dict] = field(default_factory=list)
     gotchas: list[dict] = field(default_factory=list)
+    strategy_stats: dict[str, dict] = field(default_factory=dict)
 
     def to_prompt(self) -> str:
-        if not self.patterns and not self.gotchas:
+        if not self.patterns and not self.gotchas and not self.strategy_stats:
             return ""
         lines: list[str] = []
+        if self.strategy_stats:
+            lines.append("## 戦略別成功実績")
+            for strategy, stats in sorted(
+                self.strategy_stats.items(),
+                key=lambda x: x[1].get("success_rate", 0),
+                reverse=True,
+            ):
+                rate = stats.get("success_rate", 0)
+                total = stats.get("total", 0)
+                passed = stats.get("passed", 0)
+                avg_att = stats.get("avg_attempts", 0)
+                lines.append(
+                    f"- {strategy}: 成功率 {rate:.0%} ({passed}/{total}), "
+                    f"平均試行数 {avg_att:.1f}"
+                )
         if self.patterns:
             lines.append("## Past Successful Patterns")
             for p in self.patterns[:5]:

@@ -7,7 +7,7 @@ Analogous to Auto-Claude's post_session_processing + RecoveryManager.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from difflib import SequenceMatcher
 
 from pipeline.v2.models import (
@@ -52,7 +52,15 @@ class RecoveryManager:
     ) -> RecoveryDecision:
         """Decide recovery action based on attempt history and verdict."""
 
-        # Repeating the same error 3+ times → replan
+        # Circular fix: same code generated twice → replan immediately
+        if self._is_circular_fix():
+            return RecoveryDecision(
+                action="replan",
+                replan_reason="同一コードが繰り返し生成された (循環修正)。アプローチ変更が必要",
+                suggested_strategy_change=self._suggest_alternative(strategy),
+            )
+
+        # Repeating the same error 3+ times (recent only) → replan
         if self._is_repeating_error():
             return RecoveryDecision(
                 action="replan",
@@ -94,12 +102,24 @@ class RecoveryManager:
     # Private helpers
     # ------------------------------------------------------------------
 
-    def _is_repeating_error(self) -> bool:
-        """True if the last 3 errors are highly similar."""
-        if len(self.attempts) < 3:
+    def _is_circular_fix(self) -> bool:
+        """True if the same code (by hash) has been generated more than once."""
+        if len(self.attempts) < 2:
             return False
-        recent = self.attempts[-3:]
-        errors = [a.error_message for a in recent if a.error_message]
+        hashes = [a.code_hash for a in self.attempts if a.code_hash]
+        return len(hashes) != len(set(hashes))
+
+    def _recent_attempts(self, window_minutes: int = 10) -> list[Attempt]:
+        """Return only attempts within the time window."""
+        cutoff = datetime.now() - timedelta(minutes=window_minutes)
+        return [a for a in self.attempts if a.timestamp >= cutoff]
+
+    def _is_repeating_error(self) -> bool:
+        """True if the last 3 *recent* errors are highly similar."""
+        recent = self._recent_attempts()
+        if len(recent) < 3:
+            return False
+        errors = [a.error_message for a in recent[-3:] if a.error_message]
         if len(errors) < 3:
             return False
         return all(
@@ -108,10 +128,11 @@ class RecoveryManager:
         )
 
     def _is_quality_stagnant(self) -> bool:
-        """True if quality score has not improved for last 3 attempts."""
-        if len(self.attempts) < 3:
+        """True if quality score has not improved for last 3 *recent* attempts."""
+        recent = self._recent_attempts()
+        if len(recent) < 3:
             return False
-        scores = [a.quality_score for a in self.attempts[-3:]]
+        scores = [a.quality_score for a in recent[-3:]]
         return scores[-1] <= scores[-2] <= scores[-3]
 
     def _suggest_alternative(self, strategy: Strategy) -> str:
