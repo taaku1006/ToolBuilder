@@ -44,16 +44,19 @@ function PhaseAccordion({ group }: PhaseAccordionProps) {
     : 'text-yellow-400 text-xs font-medium'
 
   return (
-    <div className="border border-gray-700 rounded-lg overflow-hidden">
+    <div className="border border-gray-800 rounded overflow-hidden">
       <button
         type="button"
-        className="w-full flex items-center justify-between px-4 py-3 bg-gray-800 hover:bg-gray-750 text-left transition-colors"
+        className="w-full flex items-center justify-between px-3 py-1.5 bg-gray-900/50 hover:bg-gray-800/50 text-left transition-colors"
         onClick={() => setIsOpen((prev) => !prev)}
         aria-expanded={isOpen}
       >
-        <span className="text-sm font-medium text-gray-200">
-          Phase {group.phase}: {group.label}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className={`inline-block w-1.5 h-1.5 rounded-full ${group.isDone ? 'bg-green-400' : 'bg-yellow-400 animate-pulse'}`} />
+          <span className="text-xs font-medium text-gray-300">
+            Phase {group.phase}: {group.label}
+          </span>
+        </div>
         <span className={statusClass}>{statusLabel}</span>
       </button>
 
@@ -62,11 +65,11 @@ function PhaseAccordion({ group }: PhaseAccordionProps) {
         style={{ display: isOpen ? 'block' : 'none' }}
         aria-hidden={!isOpen}
       >
-        <ul className="px-4 py-2 space-y-1 bg-gray-900">
+        <ul className="px-3 py-1 space-y-0.5 bg-gray-950/50">
           {group.entries.map((entry, idx) => (
-            <li key={idx} className="flex items-start gap-2 text-sm text-gray-400">
-              <span className="mt-0.5 text-gray-600 select-none">&#x251C;&#x2500;</span>
-              <span>{entry.content}</span>
+            <li key={idx} className="flex items-start gap-1.5 text-xs text-gray-500">
+              <span className="mt-0.5 text-gray-700 select-none">-</span>
+              <span className="font-mono">{entry.content}</span>
             </li>
           ))}
         </ul>
@@ -86,8 +89,8 @@ export function AgentLog({ agentLog }: AgentLogProps) {
 
   return (
     <section aria-label="エージェントログ">
-      <h2 className="text-sm font-semibold text-gray-400 mb-3">エージェントログ</h2>
-      <div className="space-y-2">
+      <h2 className="text-xs uppercase tracking-wide text-gray-500 mb-2">Agent Log</h2>
+      <div className="space-y-1">
         {groups.map((group) => (
           <PhaseAccordion key={group.phase} group={group} />
         ))}
