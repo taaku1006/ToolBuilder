@@ -18,13 +18,23 @@ from core.config import Settings
 
 logger = logging.getLogger(__name__)
 
-_CODE_FENCE_RE = re.compile(r"^```(?:\w+)?\s*\n?(.*?)\n?\s*```$", re.DOTALL)
+# Matches ``` or ```python etc. anywhere in text
+_CODE_FENCE_LINE_RE = re.compile(r"^```\w*\s*$", re.MULTILINE)
 
 
-def _strip_code_fence(text: str) -> str:
-    stripped = text.strip()
-    m = _CODE_FENCE_RE.match(stripped)
-    return m.group(1).strip() if m else stripped
+def _strip_all_code_fences(text: str) -> str:
+    """Remove ALL markdown code fences from text, not just outer ones.
+
+    Handles:
+    - ```python ... ``` wrapping entire response
+    - Multiple ``` blocks scattered through long code
+    - Partial fences embedded mid-line (e.g., `data = o```python`)
+    """
+    # Remove full fence lines (```python, ```)
+    result = _CODE_FENCE_LINE_RE.sub("", text)
+    # Remove inline fence fragments (e.g., ```python appearing mid-line)
+    result = re.sub(r"```\w*", "", result)
+    return result.strip()
 
 
 def _strip_prefix(model: str) -> str:
@@ -52,6 +62,7 @@ class ClaudeSDKClient:
         self.prompt_tokens: int = 0
         self.completion_tokens: int = 0
         self.api_calls: int = 0
+        self.total_cost_usd: float = 0.0
 
         if self._oauth_token:
             os.environ["CLAUDE_CODE_OAUTH_TOKEN"] = self._oauth_token
@@ -92,7 +103,13 @@ class ClaudeSDKClient:
         self.api_calls += 1
         logger.info(
             "Claude SDK call (chat) completed",
-            extra={"model": use_model, "duration_ms": duration_ms},
+            extra={
+                "model": use_model,
+                "duration_ms": duration_ms,
+                "prompt_tokens": self.prompt_tokens,
+                "completion_tokens": self.completion_tokens,
+                "total_tokens": self.total_tokens,
+            },
         )
         return result
 
@@ -133,9 +150,15 @@ class ClaudeSDKClient:
         self.api_calls += 1
         logger.info(
             "Claude SDK call (generate_code) completed",
-            extra={"model": use_model, "duration_ms": duration_ms},
+            extra={
+                "model": use_model,
+                "duration_ms": duration_ms,
+                "prompt_tokens": self.prompt_tokens,
+                "completion_tokens": self.completion_tokens,
+                "total_tokens": self.total_tokens,
+            },
         )
-        return _strip_code_fence(result)
+        return _strip_all_code_fences(result)
 
     def _call_sdk(
         self,
@@ -195,8 +218,6 @@ class ClaudeSDKClient:
         }
         if system_prompt:
             options_kwargs["system_prompt"] = system_prompt
-        if max_tokens is not None:
-            options_kwargs["max_thinking_tokens"] = 0
 
         client = SDKClient(options=ClaudeAgentOptions(**options_kwargs))
 
@@ -209,5 +230,29 @@ class ClaudeSDKClient:
                     for content in msg.content:
                         if hasattr(content, "text"):
                             response_text += content.text
+                elif msg_type == "ResultMessage":
+                    self._track_usage(msg)
 
         return response_text
+
+    def _track_usage(self, result_msg) -> None:
+        """Extract token counts and cost from ResultMessage."""
+        usage = getattr(result_msg, "usage", None)
+        if usage and isinstance(usage, dict):
+            input_t = usage.get("input_tokens", 0) + usage.get("cache_read_input_tokens", 0) + usage.get("cache_creation_input_tokens", 0)
+            output_t = usage.get("output_tokens", 0)
+            self.prompt_tokens += input_t
+            self.completion_tokens += output_t
+            self.total_tokens += input_t + output_t
+
+        cost = getattr(result_msg, "total_cost_usd", 0.0)
+        if cost:
+            self.total_cost_usd += cost
+            logger.info(
+                "Claude SDK usage tracked",
+                extra={
+                    "cost_usd": cost,
+                    "cumulative_cost_usd": self.total_cost_usd,
+                    "total_tokens": self.total_tokens,
+                },
+            )
