@@ -72,6 +72,7 @@ async def generate_simple(
         file_context=state.file_context.to_prompt(),
         strategy=state.strategy.to_prompt(),
         memory="",
+        checklist=state.memory_context.to_checklist(),
         fix_request="",
     )
 
@@ -98,6 +99,7 @@ async def generate_standard(
         file_context=state.file_context.to_prompt(),
         strategy=state.strategy.to_prompt(),
         memory=state.memory_context.to_prompt(),
+        checklist=state.memory_context.to_checklist(),
         fix_request="",
     )
 

@@ -56,9 +56,7 @@ async def verify_fix_loop(
     best_code = code
     best_score = 0.0
 
-    max_attempts = v2_settings.max_attempts.get(
-        state.classification.complexity, 4
-    )
+    max_attempts, force_level3 = _assess_risk(state, v2_settings)
 
     for attempt_num in range(max_attempts):
         yield AgentLogEntry(
@@ -78,6 +76,7 @@ async def verify_fix_loop(
             v2_settings=v2_settings,
             openai_client=openai_client,
             settings=settings,
+            force_level3=force_level3,
         )
 
         # Track best
@@ -171,6 +170,7 @@ async def verify(
     v2_settings: V2Settings,
     openai_client: OpenAIClient,
     settings=None,
+    force_level3: bool = False,
 ) -> VerificationResult:
     """3-level verification: execution → mechanical → LLM semantic."""
 
@@ -220,8 +220,8 @@ async def verify(
 
     # ── Level 3: LLM semantic eval (conditional) ──
     semantic_score = quality_score * 10
-    if (expected_file_path
-            and 0.5 < quality_score < v2_settings.quality_threshold):
+    run_level3 = force_level3 or (0.5 < quality_score < v2_settings.quality_threshold)
+    if expected_file_path and run_level3:
         try:
             from evaluation.llm_judge import evaluate_code
             eval_result = evaluate_code(task, "", settings)

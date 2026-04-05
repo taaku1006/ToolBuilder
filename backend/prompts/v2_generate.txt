@@ -13,6 +13,8 @@
 ## 過去の学習
 {memory}
 
+{checklist}
+
 {fix_request}
 
 ## 要件

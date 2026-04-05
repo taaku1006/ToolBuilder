@@ -65,6 +65,17 @@ class LearnPhase:
             passed=result.passed,
         )
 
+        # Extract and save structured insights for cross-session learning
+        insights = _extract_insights(
+            attempts=result.attempts,
+            task_type=state.classification.task_type,
+            strategy=state.strategy.approach,
+            passed=result.passed,
+            replan_count=state.replan_count,
+        )
+        for insight in insights:
+            self._store.save_insight(**insight)
+
         logger.info(
             "Learn: session recorded",
             extra={
