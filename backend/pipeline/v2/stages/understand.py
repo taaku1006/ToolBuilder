@@ -214,18 +214,43 @@ class StrategyPhase:
         return _parse_strategy_response(raw)
 
 
+def _extract_json(raw: str) -> str:
+    """Extract JSON from LLM response that may contain surrounding text."""
+    text = raw.strip()
+
+    # Try 1: Strip markdown code fences
+    import re
+    fence_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?\s*```", text, re.DOTALL)
+    if fence_match:
+        return fence_match.group(1).strip()
+
+    # Try 2: Find first { ... } block
+    first_brace = text.find("{")
+    if first_brace >= 0:
+        # Find matching closing brace
+        depth = 0
+        for i in range(first_brace, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[first_brace:i + 1]
+
+    return text
+
+
 def _parse_strategy_response(raw: str) -> tuple[TaskClassification, Strategy]:
     """Parse LLM JSON response into TaskClassification + Strategy."""
-    # Strip markdown code fences if present
-    text = raw.strip()
-    if text.startswith("```"):
-        lines = text.split("\n")
-        text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+    text = _extract_json(raw)
 
     try:
         data = json.loads(text)
     except json.JSONDecodeError:
-        logger.warning("Failed to parse strategy response, using defaults")
+        logger.warning(
+            "Failed to parse strategy response, using defaults. Raw (first 200): %s",
+            raw[:200],
+        )
         return TaskClassification(), Strategy()
 
     classification = TaskClassification(
