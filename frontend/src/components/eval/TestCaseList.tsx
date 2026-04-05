@@ -13,15 +13,15 @@ export function TestCaseList({ cases, selectedCases, onToggleCase, onDeleteCase 
   }
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+      <table className="w-full text-xs">
         <thead>
-          <tr className="border-b border-gray-700">
-            <th className="text-left py-1.5 px-2 text-gray-500 text-xs w-8" />
-            <th className="text-left py-1.5 px-2 text-gray-500 text-xs">Label</th>
-            <th className="text-left py-1.5 px-2 text-gray-500 text-xs">Task</th>
-            <th className="text-center py-1.5 px-2 text-gray-500 text-xs">Input</th>
-            <th className="text-center py-1.5 px-2 text-gray-500 text-xs">Expected</th>
-            <th className="text-center py-1.5 px-1 text-gray-500 text-xs w-12" />
+          <tr className="border-b border-gray-800">
+            <th className="text-left py-1 px-2 text-gray-600 font-normal uppercase tracking-wide text-[10px] w-6" />
+            <th className="text-left py-1 px-2 text-gray-600 font-normal uppercase tracking-wide text-[10px]">Label</th>
+            <th className="text-left py-1 px-2 text-gray-600 font-normal uppercase tracking-wide text-[10px]">Task</th>
+            <th className="text-center py-1 px-2 text-gray-600 font-normal uppercase tracking-wide text-[10px]">In</th>
+            <th className="text-center py-1 px-2 text-gray-600 font-normal uppercase tracking-wide text-[10px]">Out</th>
+            <th className="text-center py-1 px-1 text-gray-600 font-normal text-[10px] w-8" />
           </tr>
         </thead>
         <tbody>
@@ -32,21 +32,21 @@ export function TestCaseList({ cases, selectedCases, onToggleCase, onDeleteCase 
             return (
               <tr
                 key={c.id}
-                className={`border-b border-gray-800 transition-colors cursor-pointer ${
-                  isSelected ? 'bg-blue-950/20' : 'opacity-40 hover:opacity-60'
+                className={`border-b border-gray-800/50 transition-colors cursor-pointer ${
+                  isSelected ? 'bg-blue-950/15' : 'opacity-40 hover:opacity-60'
                 }`}
                 onClick={() => onToggleCase(c.id)}
                 title={c.task}
               >
-                <td className="py-2 px-2 text-center">
-                  <span className={`inline-block w-3 h-3 rounded border ${
-                    isSelected ? 'bg-blue-600 border-blue-500' : 'border-gray-600'
+                <td className="py-1.5 px-2 text-center">
+                  <span className={`inline-block w-2.5 h-2.5 rounded border ${
+                    isSelected ? 'bg-blue-600 border-blue-500' : 'border-gray-700'
                   }`} />
                 </td>
-                <td className="py-2 px-2 text-xs font-medium text-gray-200 whitespace-nowrap max-w-[160px] truncate">
+                <td className="py-1.5 px-2 font-mono text-gray-300 whitespace-nowrap max-w-[140px] truncate">
                   {label}
                 </td>
-                <td className="py-2 px-2 text-xs text-gray-400 max-w-[320px] truncate">{taskPreview}</td>
+                <td className="py-1.5 px-2 text-gray-500 max-w-[300px] truncate">{taskPreview}</td>
                 <td className="py-2 px-2 text-center">
                   {c.file_path
                     ? <span className="inline-block w-2 h-2 rounded-full bg-indigo-400" title="Input file attached" />
