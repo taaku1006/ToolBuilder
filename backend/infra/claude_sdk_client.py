@@ -187,7 +187,7 @@ class ClaudeSDKClient:
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
             future = pool.submit(_run_in_thread)
-            return future.result(timeout=300)  # 5 min timeout
+            return future.result(timeout=120)  # 2 min timeout per call
 
     async def _call_sdk_async(
         self,

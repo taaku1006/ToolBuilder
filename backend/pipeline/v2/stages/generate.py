@@ -114,15 +114,21 @@ async def generate_standard(
     return GenerateResult(code=_extract_code(raw), success=True)
 
 
+MAX_COMPLEX_STEPS = 4
+STEP_TIMEOUT_HINT = "Keep the code concise. Do not exceed 200 lines for this step."
+
+
 async def generate_complex(
     state: PipelineState,
     openai_client: OpenAIClient,
     settings=None,
 ) -> AsyncGenerator[AgentLogEntry, None]:
-    """Step-by-step generation with intermediate verification (Inner Loop 1)."""
+    """Step-by-step generation with intermediate verification (Inner Loop 1).
+
+    Limits: max 4 steps, try/except per step, partial result on failure.
+    """
     steps = state.strategy.steps or []
     if not steps:
-        # Fallback to standard if no steps defined
         result = await generate_standard(state, openai_client, settings)
         state.generation_result = result
         yield AgentLogEntry(
@@ -132,8 +138,20 @@ async def generate_complex(
         )
         return
 
+    # Limit step count to avoid timeout
+    if len(steps) > MAX_COMPLEX_STEPS:
+        logger.warning(
+            "COMPLEX: truncating %d steps to %d", len(steps), MAX_COMPLEX_STEPS
+        )
+        steps = steps[:MAX_COMPLEX_STEPS]
+        yield AgentLogEntry(
+            phase="G", action="info",
+            content=f"ステップ数を {MAX_COMPLEX_STEPS} に制限しました",
+            timestamp=_now_iso(),
+        )
+
     accumulated_code_parts: list[str] = []
-    step_max_retries = 3
+    step_max_retries = 2  # Reduced from 3 to limit total time
 
     for step in steps:
         step_succeeded = False
@@ -144,15 +162,28 @@ async def generate_complex(
                 timestamp=_now_iso(),
             )
 
-            # Generate step code
-            step_code = await _generate_step(
-                state=state,
-                step=step,
-                prior_code="\n".join(accumulated_code_parts),
-                openai_client=openai_client,
-                settings=settings,
-                recovery_hints="" if attempt == 0 else f"前回の試行でエラー: attempt {attempt}",
-            )
+            try:
+                step_code = await _generate_step(
+                    state=state,
+                    step=step,
+                    prior_code="\n".join(accumulated_code_parts),
+                    openai_client=openai_client,
+                    settings=settings,
+                    recovery_hints=(
+                        STEP_TIMEOUT_HINT if attempt == 0
+                        else f"Previous attempt failed. {STEP_TIMEOUT_HINT}"
+                    ),
+                )
+            except Exception as exc:
+                logger.warning(
+                    "COMPLEX step %d generation failed: %s", step.id, exc
+                )
+                yield AgentLogEntry(
+                    phase=f"G.{step.id}", action="error",
+                    content=f"Step {step.id} LLM error: {str(exc)[:100]}",
+                    timestamp=_now_iso(),
+                )
+                break  # Move to partial result fallback
 
             # Execute full code (prior + this step)
             full_code = "\n".join(accumulated_code_parts + [step_code])
@@ -161,7 +192,6 @@ async def generate_complex(
                 file_id=state.file_id,
             )
 
-            # Verify step
             verification = _verify_step(exec_result, step)
 
             if verification.passed:
@@ -181,6 +211,24 @@ async def generate_complex(
                 )
 
         if not step_succeeded:
+            # Return partial result if we have some steps done
+            if accumulated_code_parts:
+                partial_code = "\n".join(accumulated_code_parts)
+                logger.info(
+                    "COMPLEX: returning partial result (%d/%d steps)",
+                    len(accumulated_code_parts), len(steps),
+                )
+                state.generation_result = GenerateResult(
+                    code=partial_code, success=True,
+                    tips=f"Partial: {len(accumulated_code_parts)}/{len(steps)} steps completed",
+                )
+                yield AgentLogEntry(
+                    phase="G", action="complete",
+                    content=f"部分生成完了 ({len(accumulated_code_parts)}/{len(steps)} steps)",
+                    timestamp=_now_iso(),
+                )
+                return
+
             state.generation_result = GenerateResult(success=False, replan_needed=True)
             yield AgentLogEntry(
                 phase=f"G.{step.id}", action="error",
