@@ -61,9 +61,9 @@ class ArchitectureConfig:
 
     id: str
     architecture_type: str = "toolbuilder"  # "toolbuilder" | "magentic_one_pkg" | "magentic_one_embed" | "v2_adaptive"
-    phases: list[str] = field(default_factory=lambda: ["A", "B", "P", "C", "D", "F", "G", "E"])
+    phases: list[str] = field(default_factory=lambda: ["U", "G", "VF", "L"])
     pipeline: PipelineConfig | None = None
-    model: str = "gpt-4o"
+    model: str = ""
     debug_retry_limit: int = 3
     temperature: float = 0.2
     description: str = ""
@@ -90,7 +90,7 @@ class ArchitectureConfig:
                 "llm_eval_retry_limit": p.llm_eval_retry_limit,
                 "max_subtasks": 10,
                 "skills_enabled": p.skills,
-                "openai_model": self.model,
+                "llm_model": self.model,
             }
 
         has_exploration = "A" in self.phases
@@ -106,7 +106,7 @@ class ArchitectureConfig:
             "debug_loop_enabled": has_debug,
             "eval_debug_loop_enabled": has_eval_debug,
             "skills_enabled": has_skills,
-            "openai_model": self.model,
+            "llm_model": self.model,
             "debug_retry_limit": self.debug_retry_limit,
         }
 
@@ -162,7 +162,7 @@ class EvalResult:
     test_case_id: str
     metrics: EvalMetrics
     agent_log: list[dict]
-    model: str = "gpt-4o"
+    model: str = ""
     generated_code: str | None = None
     error: str | None = None
     output_files: list[str] = field(default_factory=list)

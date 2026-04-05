@@ -1,7 +1,7 @@
 {
   "id": "v2_adaptive_no_memory",
   "architecture_type": "v2_adaptive",
-  "model": "gpt-4o",
+  "model": "",
   "description": "Adaptive Pipeline v2 without memory (ablation test)",
   "pipeline": {
     "explore": false,
@@ -13,14 +13,6 @@
     "skills": false
   },
   "v2_config": {
-    "stage_models": {
-      "understand": "gpt-4o-mini",
-      "strategize": "gpt-4o-mini",
-      "generate": "gpt-4o",
-      "generate_step": "gpt-4o",
-      "verify_llm": "gpt-4o-mini",
-      "fix": "gpt-4o"
-    },
     "max_attempts": {
       "simple": 2,
       "standard": 4,

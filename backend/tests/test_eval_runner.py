@@ -326,7 +326,7 @@ class TestEvalRunnerFullRun:
         applied_settings = {}
 
         async def mock_orchestrate(task, file_id, settings, expected_file_path=None, cancel_check=None, rubric=None, v2_config=None):
-            applied_settings["openai_model"] = settings.openai_model
+            applied_settings["llm_model"] = settings.llm_model
             applied_settings["v2_config"] = v2_config
             entry = MagicMock()
             entry.phase = "C"
@@ -350,7 +350,7 @@ class TestEvalRunnerFullRun:
         with patch("eval.runner.orchestrate_v2", side_effect=mock_orchestrate):
             await runner.run_all()
 
-        assert applied_settings["openai_model"] == "gpt-4o-mini"
+        assert applied_settings["llm_model"] == "gpt-4o-mini"
 
 
 # ---------------------------------------------------------------------------

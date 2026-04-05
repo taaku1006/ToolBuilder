@@ -1,8 +1,8 @@
 {
   "id": "v2_adaptive",
   "architecture_type": "v2_adaptive",
-  "model": "ollama/gemma4:e2b",
-  "description": "Adaptive Pipeline v2: 4-stage architecture with unified verify-fix loop",
+  "model": "",
+  "description": "Adaptive Pipeline v2: 4-stage with unified verify-fix loop",
   "pipeline": {
     "explore": false,
     "reflect": false,
@@ -13,14 +13,6 @@
     "skills": false
   },
   "v2_config": {
-    "stage_models": {
-      "understand": "gpt-4o-mini",
-      "strategize": "gpt-4o-mini",
-      "generate": "gpt-4o",
-      "generate_step": "gpt-4o",
-      "verify_llm": "gpt-4o-mini",
-      "fix": "gpt-4o"
-    },
     "max_attempts": {
       "simple": 2,
       "standard": 4,

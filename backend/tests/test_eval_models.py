@@ -75,7 +75,7 @@ class TestArchitectureConfig:
         assert overrides["reflection_enabled"] is True
         assert overrides["debug_loop_enabled"] is True
         assert overrides["skills_enabled"] is True
-        assert overrides["openai_model"] == "gpt-4o"
+        assert overrides["llm_model"] == ""
         assert overrides["debug_retry_limit"] == 3
 
     def test_to_settings_overrides_no_reflection(self) -> None:
