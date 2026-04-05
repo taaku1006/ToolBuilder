@@ -1,7 +1,7 @@
 {
   "id": "v2_adaptive",
   "architecture_type": "v2_adaptive",
-  "model": "",
+  "model": "claude-sdk/claude-sonnet-4-6",
   "description": "Adaptive Pipeline v2: 4-stage with unified verify-fix loop",
   "pipeline": {
     "explore": false,
