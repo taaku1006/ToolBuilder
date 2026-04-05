@@ -1,0 +1,27 @@
+{
+  "id": "v2_adaptive",
+  "architecture_type": "v2_adaptive",
+  "model": "claude-sdk/claude-sonnet-4-6",
+  "description": "Adaptive Pipeline v2: 4-stage with unified verify-fix loop",
+  "pipeline": {
+    "explore": false,
+    "reflect": false,
+    "decompose": false,
+    "debug_retry_limit": 0,
+    "eval_debug": false,
+    "llm_eval_debug": false,
+    "skills": false
+  },
+  "v2_config": {
+    "max_attempts": {
+      "simple": 2,
+      "standard": 4,
+      "complex": 6
+    },
+    "max_replan": 2,
+    "quality_threshold": 0.85,
+    "semantic_threshold": 7.0,
+    "pass_threshold": 0.75,
+    "memory_enabled": true
+  }
+}

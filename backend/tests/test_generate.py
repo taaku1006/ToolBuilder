@@ -230,7 +230,7 @@ class TestGenerateEndpointErrorHandling:
         mock_openai_client: MagicMock,
     ) -> None:
         """When OpenAI returns non-JSON, endpoint returns HTTP 500."""
-        mock_openai_client.chat.completions.create.return_value = MagicMock(
+        mock_openai_client.completion.return_value = MagicMock(
             choices=[MagicMock(message=MagicMock(content="not valid json at all"))]
         )
 
@@ -252,7 +252,7 @@ class TestGenerateEndpointErrorHandling:
         mock_openai_client: MagicMock,
     ) -> None:
         """When OpenAI returns empty string, endpoint returns HTTP 500."""
-        mock_openai_client.chat.completions.create.return_value = MagicMock(
+        mock_openai_client.completion.return_value = MagicMock(
             choices=[MagicMock(message=MagicMock(content=""))]
         )
 
@@ -277,7 +277,7 @@ class TestGenerateEndpointErrorHandling:
         import json
 
         incomplete = json.dumps({"summary": "要約のみ"})  # missing python_code etc.
-        mock_openai_client.chat.completions.create.return_value = MagicMock(
+        mock_openai_client.completion.return_value = MagicMock(
             choices=[MagicMock(message=MagicMock(content=incomplete))]
         )
 

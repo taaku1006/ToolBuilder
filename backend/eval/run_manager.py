@@ -268,6 +268,166 @@ class EvalRunManager:
         )
 
     # ------------------------------------------------------------------
+    # Individual result detail
+    # ------------------------------------------------------------------
+
+    def load_result_detail(
+        self, *, run_id: str, arch_id: str, case_id: str, results_dir: Path
+    ) -> dict:
+        """Load full detail for a single (architecture, test_case) result.
+
+        Reads the individual result JSON and the full_log JSON (if available).
+        Derives timeline, replan_history, and strategy from the log entries.
+
+        Raises FileNotFoundError when neither file exists.
+        """
+        run_dir = results_dir / f"run_{run_id}"
+        if not run_dir.exists():
+            raise FileNotFoundError(f"Run '{run_id}' not found")
+
+        # Find the individual result file
+        result_data = self._find_result_data(run_dir, arch_id, case_id)
+        if result_data is None:
+            raise FileNotFoundError(
+                f"Result not found for {arch_id}/{case_id} in run '{run_id}'"
+            )
+
+        # Try loading full log
+        agent_log_full = self._find_full_log(run_dir, arch_id, case_id)
+
+        # Use full log for derivation, fall back to truncated log
+        log_for_analysis = agent_log_full or result_data.get("agent_log", [])
+
+        # Build output files with metadata
+        output_files = []
+        for f in result_data.get("output_files", []):
+            p = Path(f)
+            if p.exists():
+                output_files.append({"path": f, "name": p.name, "size": p.stat().st_size})
+
+        metrics = result_data.get("metrics", {})
+
+        return {
+            "architecture_id": result_data.get("architecture_id", arch_id),
+            "test_case_id": result_data.get("test_case_id", case_id),
+            "model": result_data.get("model", ""),
+            "error": result_data.get("error"),
+            "generated_code": result_data.get("generated_code"),
+            "metrics": metrics,
+            "agent_log": result_data.get("agent_log", []),
+            "agent_log_full": agent_log_full,
+            "output_files": output_files,
+            "timeline": self._derive_timeline(log_for_analysis),
+            "replan_history": self._derive_replan_history(log_for_analysis),
+            "strategy": self._derive_strategy(log_for_analysis),
+        }
+
+    def _find_result_data(self, run_dir: Path, arch_id: str, case_id: str) -> dict | None:
+        """Find and parse the individual result JSON file."""
+        # Try direct pattern: {arch_id}_{case_id}.json
+        for p in run_dir.glob(f"{arch_id}_{case_id}*.json"):
+            if "_full_log" not in p.name and p.name != "summary.json":
+                try:
+                    return json.loads(p.read_text(encoding="utf-8"))
+                except (json.JSONDecodeError, OSError):
+                    continue
+
+        # Fall back to summary.json
+        summary_path = run_dir / "summary.json"
+        if summary_path.exists():
+            raw = json.loads(summary_path.read_text(encoding="utf-8"))
+            for item in raw.get("results", []):
+                if item.get("architecture_id") == arch_id and item.get("test_case_id") == case_id:
+                    return item
+
+        return None
+
+    def _find_full_log(self, run_dir: Path, arch_id: str, case_id: str) -> list[dict] | None:
+        """Find and parse the full_log JSON file."""
+        for p in run_dir.glob(f"{arch_id}_{case_id}*_full_log.json"):
+            try:
+                return json.loads(p.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                continue
+        return None
+
+    @staticmethod
+    def _derive_timeline(log_entries: list[dict]) -> list[dict]:
+        """Build a timeline with duration estimates from log entries."""
+        from datetime import datetime
+
+        timeline: list[dict] = []
+        for i, entry in enumerate(log_entries):
+            content = entry.get("content", "")
+            # Skip the final C-phase payload (large JSON)
+            if entry.get("phase") == "C" and entry.get("action") == "complete":
+                timeline.append({
+                    "phase": "C",
+                    "action": "complete",
+                    "timestamp": entry.get("timestamp", ""),
+                    "content_preview": "最終結果出力",
+                    "duration_ms": None,
+                })
+                continue
+
+            # Calculate duration to next entry
+            duration_ms = None
+            if i + 1 < len(log_entries):
+                try:
+                    t1 = datetime.fromisoformat(entry["timestamp"])
+                    t2 = datetime.fromisoformat(log_entries[i + 1]["timestamp"])
+                    duration_ms = int((t2 - t1).total_seconds() * 1000)
+                except (KeyError, ValueError):
+                    pass
+
+            timeline.append({
+                "phase": entry.get("phase", ""),
+                "action": entry.get("action", ""),
+                "timestamp": entry.get("timestamp", ""),
+                "content_preview": content[:150],
+                "duration_ms": duration_ms,
+            })
+        return timeline
+
+    @staticmethod
+    def _derive_replan_history(log_entries: list[dict]) -> list[dict]:
+        """Extract replan events from log entries."""
+        replans: list[dict] = []
+        attempt_count = 0
+        for entry in log_entries:
+            action = entry.get("action", "")
+            if action in ("start", "fix"):
+                attempt_count += 1
+            if action == "replan":
+                replans.append({
+                    "replan_index": len(replans) + 1,
+                    "reason": entry.get("content", ""),
+                    "timestamp": entry.get("timestamp", ""),
+                    "preceding_attempts": attempt_count,
+                })
+                attempt_count = 0
+        return replans
+
+    @staticmethod
+    def _derive_strategy(log_entries: list[dict]) -> dict | None:
+        """Extract strategy info from the U-phase complete entry."""
+        for entry in log_entries:
+            if entry.get("phase") == "U" and entry.get("action") == "complete":
+                content = entry.get("content", "")
+                result: dict = {"raw_content": content}
+                # Try to parse "複雑度: X, 戦略: Y" pattern
+                if "複雑度:" in content:
+                    parts = content.split(",")
+                    for part in parts:
+                        part = part.strip()
+                        if part.startswith("複雑度:"):
+                            result["complexity"] = part.split(":", 1)[1].strip()
+                        elif part.startswith("戦略:"):
+                            result["approach"] = part.split(":", 1)[1].strip()
+                return result
+        return None
+
+    # ------------------------------------------------------------------
     # Run listing
     # ------------------------------------------------------------------
 

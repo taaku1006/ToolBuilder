@@ -1,1 +1,0 @@
-{"id":"v8a_mini_f_only","pipeline":{"explore":true,"reflect":true,"decompose":false,"debug_retry_limit":3,"eval_debug":true,"llm_eval_debug":false,"eval_retry_strategy":"none"},"model":"gpt-4o-mini","description":"Mini baseline F only (no LLM eval G)"}

@@ -63,20 +63,16 @@ def mock_openai_json_str(mock_openai_response: dict) -> str:
 
 @pytest.fixture
 def mock_openai_client(mock_openai_json_str: str) -> Generator[MagicMock, None, None]:
-    """Patch OpenAIClient.generate_code to return a mock JSON string."""
-    with patch(
-        "infra.openai_client.OpenAI",
-        autospec=True,
-    ) as mock_openai_cls:
-        mock_instance = MagicMock()
-        mock_openai_cls.return_value = mock_instance
-
-        mock_choice = MagicMock()
-        mock_choice.message.content = mock_openai_json_str
-        mock_instance.chat.completions.create.return_value = MagicMock(
-            choices=[mock_choice]
-        )
-        yield mock_instance
+    """Patch litellm.completion to return a mock response."""
+    mock_choice = MagicMock()
+    mock_choice.message.content = mock_openai_json_str
+    mock_response = MagicMock(
+        choices=[mock_choice],
+        usage=MagicMock(prompt_tokens=10, completion_tokens=20, total_tokens=30),
+    )
+    with patch("infra.llm_client.litellm") as mock_litellm:
+        mock_litellm.completion.return_value = mock_response
+        yield mock_litellm
 
 
 @pytest.fixture

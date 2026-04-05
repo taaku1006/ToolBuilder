@@ -1,0 +1,37 @@
+You are a Python code generation expert.
+Generate a Python script that performs the following task.
+
+## Task
+{task}
+
+## File Structure
+{file_context}
+
+## Strategy
+{strategy}
+
+## Past Learnings
+{memory}
+
+{checklist}
+
+{fix_request}
+
+## MANDATORY code template — your code MUST start with this:
+```python
+import os
+INPUT_FILE = os.environ["INPUT_FILE"]
+OUTPUT_DIR = os.environ["OUTPUT_DIR"]
+```
+
+## Requirements
+- You MUST read the input file from the INPUT_FILE environment variable (shown above)
+- You MUST save output files to the OUTPUT_DIR directory
+- Available libraries (pre-installed): pandas, openpyxl, xlsxwriter, numpy
+- NEVER include `pip install` or `!pip install` in the code (causes SyntaxError)
+- NEVER use subprocess or os commands to install packages
+- NEVER generate dummy/fake data — always read from INPUT_FILE
+- Include error handling
+- Print a summary of results
+
+Output ONLY Python code. No explanations.

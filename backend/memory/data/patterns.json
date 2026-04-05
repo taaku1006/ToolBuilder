@@ -1,0 +1,87 @@
+{
+  "multi_step_openpyxl": {
+    "file_features": [
+      "merged_cells",
+      "multi_sheet",
+      "nested_headers"
+    ],
+    "task_type": "multi_step",
+    "winning_strategy": {
+      "approach": "openpyxl",
+      "key_functions": [
+        "load_workbook",
+        "create_sheet",
+        "cell.value",
+        "sum",
+        "average",
+        "count",
+        "if",
+        "sort",
+        "copy"
+      ],
+      "preprocessing": [
+        "データの整形とフラット化",
+        "必要な列の抽出",
+        "計算用の変数の初期化"
+      ]
+    },
+    "quality_score": 1.0,
+    "occurrences": 1,
+    "last_used": "2026-04-04T11:50:39.346068+00:00"
+  },
+  "general_pandas": {
+    "file_features": [
+      "merged_cells",
+      "nested_headers",
+      "multi_sheet"
+    ],
+    "task_type": "general",
+    "winning_strategy": {
+      "approach": "pandas",
+      "key_functions": [],
+      "preprocessing": []
+    },
+    "quality_score": 1.0,
+    "occurrences": 3,
+    "last_used": "2026-04-05T06:02:04.156152+00:00"
+  },
+  "multi_step_hybrid": {
+    "file_features": [
+      "nested_headers",
+      "multi_sheet",
+      "merged_cells"
+    ],
+    "task_type": "multi_step",
+    "winning_strategy": {
+      "approach": "hybrid",
+      "key_functions": [
+        "pandas.read_excel",
+        "openpyxl.load_workbook",
+        "ws.copy_worksheet / wb.copy_sheet",
+        "openpyxl.utils.get_column_letter",
+        "cell.font (Font color)",
+        "cell.fill (PatternFill)",
+        "ws.merge_cells",
+        "ws.sheet_state = 'hidden'",
+        "ws.page_setup (paperSize, orientation)",
+        "ws.oddHeader / ws.oddFooter",
+        "openpyxl.worksheet.worksheet.Worksheet.delete_rows",
+        "pandas.melt (for defect flatten)",
+        "groupby + cumsum (for pareto cumulative %)",
+        "numpy.where / clip (OEE performance rate cap)",
+        "pandas.Timedelta (for claim overdue detection)"
+      ],
+      "preprocessing": [
+        "検査データの不良区分1〜3と不良数1〜3を縦持ち（melt/stack）に変換してフラット展開し、NaN行を除去した上で不良区分別に集計する",
+        "設備稼働ログにライン別設計CT辞書（SMT-L1=12, SMT-L2=15, DIP-L1=20）をマージし、性能率をnp.clipで100%上限キャップを適用してOEEを算出する",
+        "SPC測定データで測定値1〜5からX̄とRを計算し、ライン×測定項目ごとにX̄̄・R̄・UCL・LCLを算出後、管理限界超過フラグと連続7点同側トレンド検知を行う",
+        "クレーム台帳の受付日をpandas.to_datetimeで変換し、処置状況が「完了」でないレコードを抽出、当月基準日との差分で30日以上を遅延フラグとしてマークする",
+        "前月実績シートを辞書形式（指標→値）に変換し、当月算出値との差分・矢印（±5%閾値）・文字色ロジックを一括計算する",
+        "テンプレートシートのmerged_cellsリストをopenpyxlで取得・保持し、コピー後の書き込み時にmerge_cells()を再適用してセル結合を維持する"
+      ]
+    },
+    "quality_score": 1.0,
+    "occurrences": 1,
+    "last_used": "2026-04-05T06:57:39.881446+00:00"
+  }
+}

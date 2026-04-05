@@ -350,7 +350,7 @@ class TestRunnerFileIdIntegration:
 
         called_with: dict = {}
 
-        async def mock_orchestrate(task, file_id, settings, expected_file_path=None, cancel_check=None, rubric=None):
+        async def mock_orchestrate(task, file_id, settings, expected_file_path=None, cancel_check=None, rubric=None, v2_config=None):
             called_with["file_id"] = file_id
             entry = MagicMock()
             entry.phase = "C"
@@ -384,7 +384,7 @@ class TestRunnerFileIdIntegration:
             settings_factory=make_settings,
         )
 
-        with patch("eval.runner.orchestrate", side_effect=mock_orchestrate):
+        with patch("eval.runner.orchestrate_v2", side_effect=mock_orchestrate):
             result = await runner.run_single(arch, case)
 
         # file_id must be non-None
@@ -410,7 +410,7 @@ class TestRunnerFileIdIntegration:
 
         called_with: dict = {}
 
-        async def mock_orchestrate(task, file_id, settings, expected_file_path=None, cancel_check=None, rubric=None):
+        async def mock_orchestrate(task, file_id, settings, expected_file_path=None, cancel_check=None, rubric=None, v2_config=None):
             called_with["file_id"] = file_id
             entry = MagicMock()
             entry.phase = "C"
@@ -440,7 +440,7 @@ class TestRunnerFileIdIntegration:
             settings_factory=make_settings,
         )
 
-        with patch("eval.runner.orchestrate", side_effect=mock_orchestrate):
+        with patch("eval.runner.orchestrate_v2", side_effect=mock_orchestrate):
             await runner.run_single(arch, case)
 
         assert called_with.get("file_id") is None
@@ -466,7 +466,7 @@ class TestRunnerFileIdIntegration:
         upload_dir = tmp_path / "uploads"
         upload_dir.mkdir()
 
-        async def mock_orchestrate(task, file_id, settings, expected_file_path=None, cancel_check=None, rubric=None):
+        async def mock_orchestrate(task, file_id, settings, expected_file_path=None, cancel_check=None, rubric=None, v2_config=None):
             entry = MagicMock()
             entry.phase = "C"
             entry.action = "complete"
@@ -488,7 +488,7 @@ class TestRunnerFileIdIntegration:
             settings_factory=make_settings,
         )
 
-        with patch("eval.runner.orchestrate", side_effect=mock_orchestrate):
+        with patch("eval.runner.orchestrate_v2", side_effect=mock_orchestrate):
             result = await runner.run_single(arch, case)
 
         # Should capture an error since file is missing

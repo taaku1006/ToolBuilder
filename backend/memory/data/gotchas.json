@@ -1,0 +1,8 @@
+{
+  "pip_install_in_code": {
+    "detection": "pip install がPythonコード内に含まれている (SyntaxError: invalid syntax)",
+    "fix": "pip install 文をコードに含めないこと。pandas, openpyxl, numpy 等は実行環境にプリインストール済み。",
+    "occurrences": 3,
+    "confidence": 0.8
+  }
+}

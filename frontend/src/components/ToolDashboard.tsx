@@ -177,7 +177,7 @@ export function ToolDashboard({ onBack }: ToolDashboardProps) {
             onClick={onBack}
             className="px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors border border-gray-700"
           >
-            &#8592; ツール作成に戻る
+            &#8592; Back to Build
           </button>
         </div>
 
@@ -223,7 +223,7 @@ export function ToolDashboard({ onBack }: ToolDashboardProps) {
           <div className="py-16 text-center">
             <p className="text-gray-400 text-lg mb-2">ツールがまだありません</p>
             <p className="text-gray-500 text-sm mb-6">
-              「ツール作成」でタスクを実行すると、成功したコードが自動的にツールとして保存されます
+              Run a task in Build to automatically save successful code as a tool
             </p>
             <button
               onClick={onBack}

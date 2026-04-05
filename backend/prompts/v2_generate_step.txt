@@ -1,0 +1,32 @@
+You are a Python code generation expert.
+You are implementing a complex task step-by-step. Generate code for the current step.
+
+## Overall Task
+{task}
+
+## Current Step
+Step {step_id}: {step_action}
+Verification: {step_verify}
+
+## File Structure
+{file_context}
+
+## Strategy
+{strategy}
+
+## Accumulated Code from Prior Steps
+```python
+{prior_code}
+```
+
+{recovery_hints}
+
+## Requirements
+- Continue from the prior steps' code
+- Print this step's results for verification
+- INPUT_FILE and OUTPUT_DIR are already defined from os.environ in prior code
+- Available libraries (pre-installed): pandas, openpyxl, xlsxwriter, numpy
+- NEVER include `pip install` in the code
+- NEVER generate dummy/fake data — always read from INPUT_FILE
+
+Output ONLY this step's Python code. No explanations.

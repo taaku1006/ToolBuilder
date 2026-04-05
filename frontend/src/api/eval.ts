@@ -11,6 +11,16 @@ export interface PipelineConfig {
   subtask_debug_retries: number
 }
 
+export interface V2Config {
+  stage_models?: Record<string, string>
+  max_attempts?: Record<string, number>
+  max_replan?: number
+  quality_threshold?: number
+  semantic_threshold?: number
+  pass_threshold?: number
+  memory_enabled?: boolean
+}
+
 export interface Architecture {
   id: string
   architecture_type: string
@@ -20,6 +30,7 @@ export interface Architecture {
   temperature: number
   description: string
   pipeline: PipelineConfig | null
+  v2_config: V2Config | null
 }
 
 export interface EvalTestCase {
@@ -38,6 +49,68 @@ export interface RunStatus {
   total: number
   report: EvalReport | null
 }
+
+// --- Full detail types for individual result inspection ---
+
+export interface TimelineEntry {
+  phase: string
+  action: string
+  timestamp: string
+  content_preview: string
+  duration_ms: number | null
+}
+
+export interface ReplanEntry {
+  replan_index: number
+  reason: string
+  timestamp: string
+  preceding_attempts: number
+}
+
+export interface StrategyInfo {
+  complexity?: string
+  approach?: string
+  raw_content: string
+}
+
+export interface AgentLogEntry {
+  phase: string
+  action: string
+  content: string
+  timestamp: string
+}
+
+export interface ResultFullDetail {
+  architecture_id: string
+  test_case_id: string
+  model: string
+  error: string | null
+  generated_code: string | null
+  metrics: {
+    success: boolean
+    total_duration_ms: number
+    total_tokens: number
+    prompt_tokens: number
+    completion_tokens: number
+    api_calls: number
+    phase_durations_ms: Record<string, number>
+    phase_tokens: Record<string, number>
+    retry_count: number
+    code_executes: boolean
+    error_category: string
+    quality_score: number | null
+    llm_eval_score: number | null
+    estimated_cost_usd: number
+  }
+  timeline: TimelineEntry[]
+  replan_history: ReplanEntry[]
+  strategy: StrategyInfo | null
+  agent_log: AgentLogEntry[]
+  agent_log_full: AgentLogEntry[] | null
+  output_files: Array<{ path: string; name: string; size: number }>
+}
+
+// --- Existing types ---
 
 export interface ResultDetail {
   quality_score: number | null
@@ -95,6 +168,14 @@ export interface PastRun {
 
 export async function getArchitectures(): Promise<Architecture[]> {
   const res = await client.get<Architecture[]>('/eval/architectures')
+  return res.data
+}
+
+export async function updateArchitecture(
+  archId: string,
+  update: { model?: string; stage_models?: Record<string, string> },
+): Promise<Architecture> {
+  const res = await client.patch<Architecture>(`/eval/architectures/${archId}`, update)
   return res.data
 }
 
@@ -192,6 +273,17 @@ export interface ResultFileInfo {
   path: string
   name: string
   size: number
+}
+
+export async function getResultDetail(
+  runId: string,
+  archId: string,
+  caseId: string,
+): Promise<ResultFullDetail> {
+  const res = await client.get<ResultFullDetail>(
+    `/eval/run/${runId}/result/${archId}/${caseId}/detail`,
+  )
+  return res.data
 }
 
 export async function getResultFiles(

@@ -4,6 +4,7 @@ import { createHistory } from '../api/history'
 import { createSkill } from '../api/skills'
 import { useHistoryStore } from './useHistoryStore'
 import { useSkillsStore } from './useSkillsStore'
+import { useModelStore } from './useModelStore'
 import type { GenerateResponse, AgentLogEntry } from '../types'
 
 interface GenerateState {
@@ -63,9 +64,18 @@ export const useGenerateStore = create<GenerateState>((set, get) => ({
 
     set({ loading: true, error: null, agentLog: [], isStreaming: true })
 
-    const body: Record<string, string> = { task }
+    const body: Record<string, unknown> = { task }
     if (fileId != null) {
       body['file_id'] = fileId
+    }
+
+    // Include model selection from model store
+    const modelState = useModelStore.getState()
+    if (modelState.selectedModel) {
+      body['model'] = modelState.selectedModel
+    }
+    if (Object.keys(modelState.stageOverrides).length > 0) {
+      body['stage_models'] = modelState.stageOverrides
     }
 
     try {
@@ -147,23 +157,8 @@ export const useGenerateStore = create<GenerateState>((set, get) => ({
               } catch {
                 // History save failure is non-critical
               }
-            } else if (parsed.phase === 'E' && parsed.action === 'complete') {
-              // Phase E: auto-save skill if suggested
-              try {
-                const payload = JSON.parse(parsed.content) as Record<string, unknown>
-                if (payload.suggest_save) {
-                  await createSkill({
-                    title: (payload.task_summary as string) || task,
-                    tags: [],
-                    python_code: (payload.python_code as string) || '',
-                    task_summary: (payload.task_summary as string) || null,
-                  })
-                  // Refresh skills list in sidebar
-                  void useSkillsStore.getState().fetchSkills()
-                }
-              } catch {
-                // Skill save failure is non-critical
-              }
+            } else if (parsed.phase === 'L' && parsed.action === 'complete') {
+              // Learn phase complete — no action needed, logged for SSE display
               set((state) => ({ agentLog: [...state.agentLog, parsed] }))
             } else if (parsed.action === 'error') {
               set((state) => ({ agentLog: [...state.agentLog, parsed] }))

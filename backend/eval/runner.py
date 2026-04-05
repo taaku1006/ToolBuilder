@@ -15,7 +15,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Callable
 
 from eval.models import ArchitectureConfig, EvalMetrics, EvalResult, TestCase
-from pipeline.agent_orchestrator import CancelledError, orchestrate
+from pipeline.orchestrator_types import CancelledError
+from pipeline.v2 import orchestrate_v2
 from evaluation.eval_agent import evaluate_output
 from evaluation.excel_comparator import compare_excel_files, find_best_output_match
 from infra.sandbox import execute_code
@@ -155,13 +156,14 @@ class EvalRunner:
                     cancel_check=self._cancel_check,
                 )
             else:
-                _stream = orchestrate(
+                _stream = orchestrate_v2(
                     task=case.task,
                     file_id=file_id,
                     settings=settings,
                     expected_file_path=case.expected_file_path,
                     cancel_check=self._cancel_check,
                     rubric=case.rubric,
+                    v2_config=arch.v2_config,
                 )
 
             async for entry in _stream:

@@ -145,7 +145,7 @@ class TestEvalRunnerSingleRun:
             settings_factory=_make_mock_settings,
         )
 
-        with patch("eval.runner.orchestrate", side_effect=mock_orchestrate):
+        with patch("eval.runner.orchestrate_v2", side_effect=mock_orchestrate):
             result = await runner.run_single(minimal_arch, simple_case)
 
         assert isinstance(result, EvalResult)
@@ -172,7 +172,7 @@ class TestEvalRunnerSingleRun:
             settings_factory=_make_mock_settings,
         )
 
-        with patch("eval.runner.orchestrate", side_effect=mock_orchestrate_fail):
+        with patch("eval.runner.orchestrate_v2", side_effect=mock_orchestrate_fail):
             result = await runner.run_single(minimal_arch, simple_case)
 
         assert result.metrics.success is False
@@ -218,7 +218,7 @@ class TestEvalRunnerSingleRun:
             settings_factory=_make_mock_settings,
         )
 
-        with patch("eval.runner.orchestrate", side_effect=mock_orchestrate):
+        with patch("eval.runner.orchestrate_v2", side_effect=mock_orchestrate):
             result = await runner.run_single(baseline_arch, simple_case)
 
         assert isinstance(result.metrics.phase_durations_ms, dict)
@@ -262,7 +262,7 @@ class TestEvalRunnerSingleRun:
             settings_factory=_make_mock_settings,
         )
 
-        with patch("eval.runner.orchestrate", side_effect=mock_orchestrate):
+        with patch("eval.runner.orchestrate_v2", side_effect=mock_orchestrate):
             result = await runner.run_single(minimal_arch, simple_case)
 
         assert result.metrics.retry_count == 2
@@ -307,7 +307,7 @@ class TestEvalRunnerFullRun:
             settings_factory=_make_mock_settings,
         )
 
-        with patch("eval.runner.orchestrate", side_effect=mock_orchestrate):
+        with patch("eval.runner.orchestrate_v2", side_effect=mock_orchestrate):
             results = await runner.run_all()
 
         # 2 archs x 2 cases = 4 results
@@ -325,10 +325,9 @@ class TestEvalRunnerFullRun:
 
         applied_settings = {}
 
-        async def mock_orchestrate(task, file_id, settings, expected_file_path=None, cancel_check=None, rubric=None):
-            applied_settings["reflection_enabled"] = settings.reflection_enabled
-            applied_settings["debug_loop_enabled"] = settings.debug_loop_enabled
-            applied_settings["openai_model"] = settings.openai_model
+        async def mock_orchestrate(task, file_id, settings, expected_file_path=None, cancel_check=None, rubric=None, v2_config=None):
+            applied_settings["llm_model"] = settings.llm_model
+            applied_settings["v2_config"] = v2_config
             entry = MagicMock()
             entry.phase = "C"
             entry.action = "complete"
@@ -348,12 +347,10 @@ class TestEvalRunnerFullRun:
             settings_factory=_make_mock_settings,
         )
 
-        with patch("eval.runner.orchestrate", side_effect=mock_orchestrate):
+        with patch("eval.runner.orchestrate_v2", side_effect=mock_orchestrate):
             await runner.run_all()
 
-        assert applied_settings["reflection_enabled"] is False
-        assert applied_settings["debug_loop_enabled"] is False
-        assert applied_settings["openai_model"] == "gpt-4o-mini"
+        assert applied_settings["llm_model"] == "gpt-4o-mini"
 
 
 # ---------------------------------------------------------------------------

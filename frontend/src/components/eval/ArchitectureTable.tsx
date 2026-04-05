@@ -1,18 +1,32 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { Architecture } from '../../api/eval'
+import { updateArchitecture } from '../../api/eval'
+import { useModelStore } from '../../stores/useModelStore'
 import { ArchDetailPanel } from './ArchDetailPanel'
 
-type ArchCategory = 'Baseline' | 'Planner' | 'Mini' | 'Other'
+type ArchCategory = 'Adaptive v2' | 'MagenticOne'
 
-function getArchCategory(id: string): ArchCategory {
-  const lower = id.toLowerCase()
-  if (lower.includes('mini') || lower.startsWith('v8') || lower.startsWith('v9')) return 'Mini'
-  if (lower.includes('planner') || lower.startsWith('v4') || lower.startsWith('v5') || lower.startsWith('v7')) return 'Planner'
-  if (lower.startsWith('v1') || lower.startsWith('v2') || lower.startsWith('v3') || lower.startsWith('v6')) return 'Baseline'
-  return 'Other'
+const CATEGORY_STYLES: Record<ArchCategory, { border: string; badge: string; bg: string }> = {
+  'Adaptive v2': {
+    border: 'border-l-blue-500',
+    badge: 'bg-blue-900/60 text-blue-300 border-blue-700',
+    bg: 'bg-blue-950/10',
+  },
+  MagenticOne: {
+    border: 'border-l-amber-500',
+    badge: 'bg-amber-900/60 text-amber-300 border-amber-700',
+    bg: 'bg-amber-950/10',
+  },
 }
 
-const CATEGORY_ORDER: readonly ArchCategory[] = ['Baseline', 'Planner', 'Mini', 'Other'] as const
+function getArchCategory(a: Architecture): ArchCategory {
+  if (a.architecture_type === 'magentic_one_embed' || a.architecture_type === 'magentic_one_pkg') {
+    return 'MagenticOne'
+  }
+  return 'Adaptive v2'
+}
+
+const CATEGORY_ORDER: readonly ArchCategory[] = ['Adaptive v2', 'MagenticOne'] as const
 
 function groupArchitectures(archs: readonly Architecture[]): Array<{ category: ArchCategory; items: Architecture[] }> {
   const grouped = new Map<ArchCategory, Architecture[]>()
@@ -20,7 +34,7 @@ function groupArchitectures(archs: readonly Architecture[]): Array<{ category: A
     grouped.set(cat, [])
   }
   for (const a of archs) {
-    const cat = getArchCategory(a.id)
+    const cat = getArchCategory(a)
     grouped.get(cat)!.push(a)
   }
   return CATEGORY_ORDER
@@ -33,71 +47,92 @@ function PhaseDot({ active, color }: { active: boolean; color: string }) {
   return <span className={`inline-block w-2.5 h-2.5 rounded-full ${color}`} />
 }
 
-const PHASE_DOT_COLORS: Record<string, string> = {
-  A: 'bg-blue-400',
-  B: 'bg-purple-400',
-  P: 'bg-yellow-400',
-  C: 'bg-green-400',
-  D: 'bg-yellow-400',
-  F: 'bg-pink-400',
-  G: 'bg-violet-400',
+function getMemoryEnabled(a: Architecture): boolean {
+  const v2 = (a as unknown as Record<string, unknown>).v2_config as Record<string, unknown> | null
+  return (v2?.memory_enabled as boolean) ?? true
 }
 
-const TABLE_PHASES = ['A', 'B', 'P', 'C', 'D', 'G'] as const
-
-function hasPhase(a: Architecture, phase: string): boolean {
-  if (!a.pipeline) return a.phases.includes(phase)
-  const p = a.pipeline as unknown as Record<string, unknown>
-  switch (phase) {
-    case 'A': return a.pipeline.explore
-    case 'B': return a.pipeline.reflect
-    case 'P': return a.pipeline.decompose
-    case 'C': return true
-    case 'D': return true
-    case 'F': return a.pipeline.eval_debug
-    case 'G': return p.llm_eval_debug === true
-    default: return false
-  }
-}
-
-function getFStrategy(a: Architecture): string {
-  if (!a.pipeline) return a.phases.includes('F') ? 'on' : '-'
-  if (!a.pipeline.eval_debug) return '-'
-  if (a.pipeline.eval_retry_strategy === 'none') return 'none'
-  return a.pipeline.eval_retry_strategy
+function getMaxReplan(a: Architecture): number {
+  const v2 = (a as unknown as Record<string, unknown>).v2_config as Record<string, unknown> | null
+  return (v2?.max_replan as number) ?? 2
 }
 
 function getRetryLimit(a: Architecture): number {
   return a.pipeline?.debug_retry_limit ?? a.debug_retry_limit
 }
 
+function InlineModelSelect({ value, onChange }: { value: string; onChange: (m: string) => void }) {
+  const { models, loaded, fetchModels } = useModelStore()
+
+  useEffect(() => {
+    void fetchModels()
+  }, [fetchModels])
+
+  if (!loaded || models.length === 0) {
+    return <span className="text-xs text-gray-500 font-mono">{value}</span>
+  }
+
+  const grouped = new Map<string, typeof models>()
+  for (const m of models) {
+    const list = grouped.get(m.provider) ?? []
+    list.push(m)
+    grouped.set(m.provider, list)
+  }
+
+  const LABELS: Record<string, string> = {
+    openai: 'OpenAI', anthropic: 'Anthropic', google: 'Google', ollama: 'Ollama',
+  }
+
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="bg-transparent border-0 text-xs text-gray-400 font-mono cursor-pointer hover:text-gray-200 focus:outline-none focus:text-gray-200 py-0 px-0"
+    >
+      {Array.from(grouped.entries()).map(([provider, items]) => (
+        <optgroup key={provider} label={LABELS[provider] ?? provider}>
+          {items.map((m) => (
+            <option key={m.id} value={m.id}>{m.display_name}</option>
+          ))}
+        </optgroup>
+      ))}
+    </select>
+  )
+}
+
 interface ArchTableRowProps {
   arch: Architecture
+  category: ArchCategory
   isSelected: boolean
   toggleArch: (id: string) => void
   detailArchId: string | null
   setDetailArchId: (id: string | null) => void
   colSpan: number
+  onModelChange?: (archId: string, model: string) => void
 }
 
 function ArchTableRow({
   arch,
+  category,
   isSelected,
   toggleArch,
   detailArchId,
   setDetailArchId,
   colSpan,
+  onModelChange,
 }: ArchTableRowProps) {
   const isDetailOpen = detailArchId === arch.id
-  const fStrategy = getFStrategy(arch)
+  const style = CATEGORY_STYLES[category]
+  const memoryEnabled = getMemoryEnabled(arch)
+  const isV2 = category === 'Adaptive v2'
 
   return (
     <>
       <tr
-        className={`border-b border-gray-800 transition-colors cursor-pointer ${
+        className={`border-b border-gray-800 transition-colors cursor-pointer border-l-2 ${
           isSelected
-            ? 'bg-blue-950/30 border-l-2 border-l-blue-600'
-            : 'opacity-50 hover:opacity-70'
+            ? `${style.bg} ${style.border}`
+            : 'border-l-transparent opacity-50 hover:opacity-70'
         }`}
         onClick={() => toggleArch(arch.id)}
       >
@@ -107,21 +142,28 @@ function ArchTableRow({
           }`} />
         </td>
         <td className="py-2 px-2 font-mono text-xs text-gray-200 whitespace-nowrap">{arch.id}</td>
-        <td className="py-2 px-2 text-xs text-gray-400 max-w-[200px] truncate">{arch.description}</td>
-        <td className="py-2 px-2 text-xs text-gray-500 font-mono whitespace-nowrap">{arch.model}</td>
-        {TABLE_PHASES.map((p) => (
-          <td key={p} className="py-2 px-1 text-center">
-            <PhaseDot active={hasPhase(arch, p)} color={PHASE_DOT_COLORS[p] ?? 'bg-gray-400'} />
-          </td>
-        ))}
-        <td className="py-2 px-2 text-center text-xs font-mono">
-          {fStrategy === '-' ? (
-            <span className="text-gray-700">-</span>
-          ) : (
-            <span className="text-pink-400">{fStrategy}</span>
-          )}
+        <td className="py-2 px-2 text-xs text-gray-400 max-w-[240px] truncate">{arch.description}</td>
+        <td className="py-2 px-2" onClick={(e) => e.stopPropagation()}>
+          <InlineModelSelect
+            value={arch.model}
+            onChange={(m) => onModelChange?.(arch.id, m)}
+          />
         </td>
-        <td className="py-2 px-2 text-center text-xs font-mono text-gray-400">{getRetryLimit(arch)}</td>
+        {isV2 ? (
+          <>
+            <td className="py-2 px-2 text-center">
+              <PhaseDot active={memoryEnabled} color="bg-teal-400" />
+            </td>
+            <td className="py-2 px-2 text-center text-xs font-mono text-gray-400">
+              {getMaxReplan(arch)}
+            </td>
+          </>
+        ) : (
+          <>
+            <td className="py-2 px-2 text-center text-xs text-gray-600">-</td>
+            <td className="py-2 px-2 text-center text-xs text-gray-600">-</td>
+          </>
+        )}
         <td className="py-2 px-1 text-center" onClick={(e) => e.stopPropagation()}>
           <button
             onClick={() => setDetailArchId(isDetailOpen ? null : arch.id)}
@@ -153,6 +195,7 @@ interface ArchCategoryGroupProps {
   detailArchId: string | null
   setDetailArchId: (id: string | null) => void
   colSpan: number
+  onModelChange?: (archId: string, model: string) => void
 }
 
 function ArchCategoryGroup({
@@ -165,18 +208,23 @@ function ArchCategoryGroup({
   detailArchId,
   setDetailArchId,
   colSpan,
+  onModelChange,
 }: ArchCategoryGroupProps) {
+  const style = CATEGORY_STYLES[category]
+
   return (
     <>
       <tr
-        className="border-b border-gray-700 bg-gray-800/60 cursor-pointer hover:bg-gray-800 transition-colors"
+        className={`border-b border-gray-700 ${style.bg} cursor-pointer hover:bg-gray-800/80 transition-colors`}
         onClick={onToggleCategory}
       >
-        <td colSpan={colSpan} className="py-1.5 px-2">
-          <div className="flex items-center gap-2">
+        <td colSpan={colSpan} className="py-2 px-2">
+          <div className="flex items-center gap-3">
             <span className="text-xs text-gray-500">{isCollapsed ? '▶' : '▼'}</span>
-            <span className="text-xs font-medium text-gray-300">{category}</span>
-            <span className="text-xs text-gray-600">({items.length})</span>
+            <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${style.badge}`}>
+              {category}
+            </span>
+            <span className="text-xs text-gray-400">{items.length} architectures</span>
           </div>
         </td>
       </tr>
@@ -187,11 +235,13 @@ function ArchCategoryGroup({
           <ArchTableRow
             key={a.id}
             arch={a}
+            category={category}
             isSelected={isSelected}
             toggleArch={toggleArch}
             detailArchId={detailArchId}
             setDetailArchId={setDetailArchId}
             colSpan={colSpan}
+            onModelChange={onModelChange}
           />
         )
       })}
@@ -205,6 +255,7 @@ export interface ArchitectureTableProps {
   toggleArch: (id: string) => void
   detailArchId: string | null
   setDetailArchId: (id: string | null) => void
+  onModelChange?: (archId: string, model: string) => void
 }
 
 export function ArchitectureTable({
@@ -213,6 +264,7 @@ export function ArchitectureTable({
   toggleArch,
   detailArchId,
   setDetailArchId,
+  onModelChange,
 }: ArchitectureTableProps) {
   const [collapsedCategories, setCollapsedCategories] = useState<Set<ArchCategory>>(new Set())
 
@@ -226,8 +278,7 @@ export function ArchitectureTable({
   }
 
   const groups = groupArchitectures(archs)
-  // Total columns: checkbox + ID + Desc + Model + 6 phases + F strategy + Retry + Detail = 13
-  const colSpan = 13
+  const colSpan = 7 // checkbox + ID + Desc + Model + Memory + Replan + Detail
 
   return (
     <div className="overflow-x-auto">
@@ -238,11 +289,8 @@ export function ArchitectureTable({
             <th className="text-left py-2 px-2 text-gray-500 text-xs">ID</th>
             <th className="text-left py-2 px-2 text-gray-500 text-xs">Description</th>
             <th className="text-left py-2 px-2 text-gray-500 text-xs">Model</th>
-            {TABLE_PHASES.map((p) => (
-              <th key={p} className="text-center py-2 px-1 text-gray-500 text-xs w-8">{p}</th>
-            ))}
-            <th className="text-center py-2 px-2 text-gray-500 text-xs">F strategy</th>
-            <th className="text-center py-2 px-2 text-gray-500 text-xs">Retry</th>
+            <th className="text-center py-2 px-2 text-gray-500 text-xs">Memory</th>
+            <th className="text-center py-2 px-2 text-gray-500 text-xs">Replan</th>
             <th className="text-center py-2 px-1 text-gray-500 text-xs w-12" />
           </tr>
         </thead>
@@ -261,6 +309,7 @@ export function ArchitectureTable({
                 detailArchId={detailArchId}
                 setDetailArchId={setDetailArchId}
                 colSpan={colSpan}
+                onModelChange={onModelChange}
               />
             )
           })}

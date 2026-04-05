@@ -1,7 +1,7 @@
 {
   "id": "v_magentic_one_embed",
   "architecture_type": "magentic_one_embed",
-  "model": "gpt-4o",
+  "model": "ollama/gemma4:e4b",
   "temperature": 0.2,
   "description": "MagenticOne 2-loop architecture (embedded, no autogen dependency). Coder + ComputerTerminal only.",
   "pipeline": {

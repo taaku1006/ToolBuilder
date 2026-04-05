@@ -16,9 +16,11 @@ from core.config import Settings
 from core.deps import get_settings
 from schemas.generate import AgentLogEntry as AgentLogEntrySchema
 from schemas.generate import GenerateRequest, GenerateResponse
-from infra.openai_client import OpenAIClient
+from infra.openai_client import OpenAIClient as LLMClient
 from infra.prompt_builder import SYSTEM_PROMPT, build_user_prompt
 from excel.xlsx_parser import SheetInfo, build_file_context, parse_file
+from pipeline.v2 import orchestrate_v2
+from pipeline.v2.config import STAGE_CONFIGS
 
 router = APIRouter()
 
@@ -54,7 +56,7 @@ def _build_sync_response(
     agent_log: list[AgentLogEntrySchema] | None = None,
     reflection_steps: int = 0,
 ) -> GenerateResponse:
-    """Shared logic: call OpenAI and build a GenerateResponse synchronously."""
+    """Shared logic: call LLM and build a GenerateResponse synchronously."""
     file_context = _resolve_file_context(request.file_id, settings)
 
     user_prompt = build_user_prompt(
@@ -62,7 +64,7 @@ def _build_sync_response(
         file_context=file_context,
     )
 
-    client = OpenAIClient(settings)
+    client = LLMClient(settings)
     raw_response = client.generate_code(
         system_prompt=SYSTEM_PROMPT,
         user_prompt=user_prompt,
@@ -71,10 +73,10 @@ def _build_sync_response(
     try:
         parsed = json.loads(raw_response)
     except (json.JSONDecodeError, ValueError) as exc:
-        logger.error("OpenAI returned invalid JSON", extra={"error": str(exc)})
+        logger.error("LLM returned invalid JSON", extra={"error": str(exc)})
         raise HTTPException(
             status_code=500,
-            detail=f"OpenAI returned invalid JSON: {exc}",
+            detail=f"LLM returned invalid JSON: {exc}",
         ) from exc
 
     try:
@@ -88,10 +90,10 @@ def _build_sync_response(
             reflection_steps=reflection_steps,
         )
     except KeyError as exc:
-        logger.error("OpenAI response missing field", extra={"field": str(exc)})
+        logger.error("LLM response missing field", extra={"field": str(exc)})
         raise HTTPException(
             status_code=500,
-            detail=f"OpenAI response missing required field: {exc}",
+            detail=f"LLM response missing required field: {exc}",
         ) from exc
 
 
@@ -120,12 +122,22 @@ def _sse_response(request: GenerateRequest, settings: Settings) -> StreamingResp
     """Return an SSE StreamingResponse that streams orchestration progress."""
 
     async def event_stream():  # noqa: ANN202
-        from pipeline.agent_orchestrator import orchestrate
+        # Build v2_config from model params if provided
+        v2_config: dict | None = None
+        if request.model or request.stage_models:
+            v2_config = {}
+            if request.stage_models:
+                v2_config["stage_models"] = request.stage_models
+            elif request.model:
+                v2_config["stage_models"] = {
+                    stage: request.model for stage in STAGE_CONFIGS
+                }
 
-        async for entry in orchestrate(
+        async for entry in orchestrate_v2(
             task=request.task,
             file_id=request.file_id,
             settings=settings,
+            v2_config=v2_config,
         ):
             # Build a flat dict for each event; always include phase
             event_dict: dict = {

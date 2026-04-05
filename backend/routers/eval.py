@@ -54,6 +54,7 @@ class ArchitectureOut(BaseModel):
     temperature: float
     description: str
     pipeline: dict | None = None
+    v2_config: dict | None = None
 
 
 class TestCaseOut(BaseModel):
@@ -108,9 +109,49 @@ async def list_architectures() -> list[ArchitectureOut]:
                 "llm_eval_retry_limit": a.pipeline.llm_eval_retry_limit,
                 "subtask_debug_retries": a.pipeline.subtask_debug_retries,
             } if a.pipeline else None,
+            v2_config=a.v2_config,
         )
         for a in archs
     ]
+
+
+class ArchitectureUpdateRequest(BaseModel):
+    model: str | None = None
+    stage_models: dict[str, str] | None = None
+
+
+@router.patch("/eval/architectures/{arch_id}")
+async def update_architecture(arch_id: str, req: ArchitectureUpdateRequest) -> ArchitectureOut:
+    """Update model settings for an architecture config file."""
+    json_path = _ARCHS_DIR / f"{arch_id}.json"
+    if not json_path.exists():
+        raise HTTPException(status_code=404, detail=f"Architecture '{arch_id}' not found")
+
+    data = json.loads(json_path.read_text(encoding="utf-8"))
+
+    if req.model is not None:
+        data["model"] = req.model
+    if req.stage_models is not None:
+        if "v2_config" not in data:
+            data["v2_config"] = {}
+        data["v2_config"]["stage_models"] = req.stage_models
+
+    json_path.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+
+    a = load_architecture(json_path)
+    return ArchitectureOut(
+        id=a.id,
+        architecture_type=a.architecture_type,
+        phases=a.phases,
+        model=a.model,
+        debug_retry_limit=a.debug_retry_limit,
+        temperature=a.temperature,
+        description=a.description,
+        pipeline=None,
+        v2_config=a.v2_config,
+    )
 
 
 @router.get("/eval/test-cases")
@@ -494,6 +535,17 @@ async def diff_run_snapshots(run_id: str, other_id: str) -> dict:
         "changed_configs": diff.changed_configs,
         "is_identical": diff.is_identical,
     }
+
+
+@router.get("/eval/run/{run_id}/result/{arch_id}/{case_id}/detail")
+async def get_result_detail(run_id: str, arch_id: str, case_id: str) -> dict:
+    """Return full detail for a single (architecture, test_case) eval result."""
+    try:
+        return _manager.load_result_detail(
+            run_id=run_id, arch_id=arch_id, case_id=case_id, results_dir=_RESULTS_DIR
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
 
 
 @router.get("/eval/run/{run_id}/result/{arch_id}/{case_id}/files")

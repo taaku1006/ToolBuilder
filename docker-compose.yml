@@ -26,9 +26,11 @@ services:
       - https_proxy=${HTTPS_PROXY}
       - NO_PROXY=${NO_PROXY}
       - no_proxy=${NO_PROXY}
+      - OLLAMA_API_BASE=http://ollama:11434
     volumes:
       - ./backend:/app
-    depends_on: []
+    depends_on:
+      - ollama
 
   frontend:
     build: ./frontend
@@ -39,6 +41,20 @@ services:
       - /app/node_modules
     depends_on:
       - backend
+
+  ollama:
+    image: ollama/ollama:0.20.0
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   langfuse-db:
     image: postgres:15-alpine
@@ -85,4 +101,5 @@ services:
       - frontend
 
 volumes:
+  ollama_data:
   langfuse_db_data:

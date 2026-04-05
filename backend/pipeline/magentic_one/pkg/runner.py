@@ -106,7 +106,7 @@ async def run_magentic_one_pkg(
 
     try:
         client = OpenAIChatCompletionClient(
-            model=settings.openai_model,
+            model=settings.active_model,
             api_key=settings.openai_api_key,
         )
 

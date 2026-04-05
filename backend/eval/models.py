@@ -10,7 +10,8 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
 # Cost per 1M tokens by model (input, output) — 2025-05 pricing
-_MODEL_PRICING: dict[str, tuple[float, float]] = {
+MODEL_PRICING: dict[str, tuple[float, float]] = {
+    # OpenAI
     "gpt-4o":           (2.50, 10.00),
     "gpt-4o-mini":      (0.15,  0.60),
     "gpt-4.1":          (2.00,  8.00),
@@ -21,6 +22,21 @@ _MODEL_PRICING: dict[str, tuple[float, float]] = {
     "o3":               (2.00,  8.00),
     "o3-mini":          (1.10,  4.40),
     "o4-mini":          (1.10,  4.40),
+    # Anthropic
+    "anthropic/claude-opus-4-6":      (15.00, 75.00),
+    "anthropic/claude-sonnet-4-6":    (3.00,  15.00),
+    "anthropic/claude-haiku-4-5":     (0.80,   4.00),
+    # Claude SDK (subscription-based, cost = $0 for usage tracking)
+    "claude-sdk/claude-opus-4-6":     (0.00,   0.00),
+    "claude-sdk/claude-sonnet-4-6":   (0.00,   0.00),
+    "claude-sdk/claude-haiku-4-5":    (0.00,   0.00),
+    # Google Gemini
+    "gemini/gemini-2.5-pro":          (1.25,  10.00),
+    "gemini/gemini-2.5-flash":        (0.15,   0.60),
+    # Ollama (local — free)
+    "ollama/gemma4:e4b":              (0.00,   0.00),
+    "ollama/gemma4:e2b":              (0.00,   0.00),
+    "ollama/gemma3:4b":               (0.00,   0.00),
 }
 
 
@@ -48,13 +64,14 @@ class ArchitectureConfig:
     """Defines an agent architecture variant for evaluation."""
 
     id: str
-    architecture_type: str = "toolbuilder"  # "toolbuilder" | "magentic_one_pkg" | "magentic_one_embed"
-    phases: list[str] = field(default_factory=lambda: ["A", "B", "P", "C", "D", "F", "G", "E"])
+    architecture_type: str = "toolbuilder"  # "toolbuilder" | "magentic_one_pkg" | "magentic_one_embed" | "v2_adaptive"
+    phases: list[str] = field(default_factory=lambda: ["U", "G", "VF", "L"])
     pipeline: PipelineConfig | None = None
-    model: str = "gpt-4o"
+    model: str = ""
     debug_retry_limit: int = 3
     temperature: float = 0.2
     description: str = ""
+    v2_config: dict | None = None  # v2-specific: stage_models, max_attempts, thresholds, etc.
 
     def to_settings_overrides(self) -> dict:
         """Return a dict of Settings field overrides derived from this config."""
@@ -77,7 +94,7 @@ class ArchitectureConfig:
                 "llm_eval_retry_limit": p.llm_eval_retry_limit,
                 "max_subtasks": 10,
                 "skills_enabled": p.skills,
-                "openai_model": self.model,
+                "llm_model": self.model,
             }
 
         has_exploration = "A" in self.phases
@@ -93,7 +110,7 @@ class ArchitectureConfig:
             "debug_loop_enabled": has_debug,
             "eval_debug_loop_enabled": has_eval_debug,
             "skills_enabled": has_skills,
-            "openai_model": self.model,
+            "llm_model": self.model,
             "debug_retry_limit": self.debug_retry_limit,
         }
 
@@ -135,7 +152,7 @@ class EvalMetrics:
 
     def estimated_cost_usd(self, model: str = "gpt-4o") -> float:
         """Estimate cost based on input/output token counts and model pricing."""
-        input_rate, output_rate = _MODEL_PRICING.get(model, _MODEL_PRICING["gpt-4o"])
+        input_rate, output_rate = MODEL_PRICING.get(model, MODEL_PRICING["gpt-4o"])
         input_cost = (self.prompt_tokens / 1_000_000) * input_rate
         output_cost = (self.completion_tokens / 1_000_000) * output_rate
         return input_cost + output_cost
@@ -149,7 +166,7 @@ class EvalResult:
     test_case_id: str
     metrics: EvalMetrics
     agent_log: list[dict]
-    model: str = "gpt-4o"
+    model: str = ""
     generated_code: str | None = None
     error: str | None = None
     output_files: list[str] = field(default_factory=list)
@@ -206,6 +223,7 @@ def load_architecture(path: Path) -> ArchitectureConfig:
         debug_retry_limit=data.get("debug_retry_limit", 3),
         temperature=data.get("temperature", 0.2),
         description=data.get("description", ""),
+        v2_config=data.get("v2_config"),
     )
 
 

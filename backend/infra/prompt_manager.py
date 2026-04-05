@@ -48,7 +48,7 @@ def _get_langfuse(settings: Settings):
         _langfuse_client = Langfuse(
             public_key=settings.langfuse_public_key,
             secret_key=settings.langfuse_secret_key,
-            host=settings.langfuse_host,
+            base_url=settings.langfuse_host,
         )
         return _langfuse_client
     except Exception:

@@ -6,6 +6,8 @@ class GenerateRequest(BaseModel):
     file_id: str | None = None
     max_steps: int = 3
     skill_id: str | None = None
+    model: str | None = None
+    stage_models: dict[str, str] | None = None
 
 
 class AgentLogEntry(BaseModel):

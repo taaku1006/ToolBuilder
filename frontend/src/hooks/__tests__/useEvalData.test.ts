@@ -12,12 +12,12 @@ import { getArchitectures, getTestCases, listRuns } from '../../api/eval'
 
 const mockArchitectures = [
   {
-    id: 'v1',
-    phases: ['A', 'C', 'D'],
+    id: 'v2_adaptive',
+    phases: ['U', 'G', 'VF', 'L'],
     model: 'gpt-4o',
     debug_retry_limit: 3,
     temperature: 0.0,
-    description: 'Baseline',
+    description: 'Adaptive Pipeline v2',
     pipeline: null,
   },
 ]

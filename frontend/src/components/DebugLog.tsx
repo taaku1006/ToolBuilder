@@ -9,13 +9,13 @@ interface RetryEntry {
   content: string
 }
 
-function extractPhaseDData(agentLog: AgentLogEntry[]): {
+function extractVerifyFixData(agentLog: AgentLogEntry[]): {
   startEntry: AgentLogEntry | null
   retries: RetryEntry[]
   completeEntry: AgentLogEntry | null
   errorEntry: AgentLogEntry | null
 } {
-  const phaseDEntries = agentLog.filter((entry) => entry.phase === 'D')
+  const vfEntries = agentLog.filter((entry) => entry.phase === 'VF')
 
   let startEntry: AgentLogEntry | null = null
   const retries: RetryEntry[] = []
@@ -23,15 +23,15 @@ function extractPhaseDData(agentLog: AgentLogEntry[]): {
   let errorEntry: AgentLogEntry | null = null
   let retryCount = 0
 
-  for (const entry of phaseDEntries) {
+  for (const entry of vfEntries) {
     if (entry.action === 'start') {
       startEntry = entry
-    } else if (entry.action === 'retry') {
+    } else if (entry.action === 'fix' || entry.action === 'retry') {
       retryCount += 1
       retries.push({ index: retryCount, content: entry.content })
     } else if (entry.action === 'complete') {
       completeEntry = entry
-    } else if (entry.action === 'error') {
+    } else if (entry.action === 'error' || entry.action === 'escalate') {
       errorEntry = entry
     }
   }
@@ -40,46 +40,43 @@ function extractPhaseDData(agentLog: AgentLogEntry[]): {
 }
 
 export function DebugLog({ agentLog }: DebugLogProps) {
-  const phaseDEntries = agentLog.filter((entry) => entry.phase === 'D')
+  const vfEntries = agentLog.filter((entry) => entry.phase === 'VF')
 
-  if (phaseDEntries.length === 0) return null
+  if (vfEntries.length === 0) return null
 
-  const { startEntry, retries, completeEntry, errorEntry } = extractPhaseDData(agentLog)
+  const { startEntry, retries, completeEntry, errorEntry } = extractVerifyFixData(agentLog)
 
   const hasSuccess = completeEntry !== null
   const hasError = errorEntry !== null
 
   return (
-    <section aria-label="自律デバッグログ" className="rounded-lg border border-gray-700 bg-gray-900 p-4">
-      <div className="flex items-center justify-between mb-3">
+    <section aria-label="検証・修正ログ" className="rounded border border-gray-800 bg-gray-900/50 p-3">
+      <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-gray-400 bg-gray-800 border border-gray-600 rounded px-1.5 py-0.5">
-            Phase D
+          <span className="text-[10px] font-mono text-gray-500 bg-gray-800/80 border border-gray-800 rounded px-1.5 py-0.5">
+            VF
           </span>
-          <h2 className="text-sm font-bold text-gray-200">自律デバッグ</h2>
+          <h2 className="text-xs font-medium text-gray-300">Verify-Fix</h2>
         </div>
         {hasSuccess && (
-          <span className="text-green-400 text-xs font-medium">成功</span>
+          <span className="inline-block w-2 h-2 rounded-full bg-green-400" title="Success" />
         )}
         {hasError && (
-          <span className="text-red-400 text-xs font-medium">失敗</span>
+          <span className="inline-block w-2 h-2 rounded-full bg-red-400" title="Failed" />
         )}
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-1">
         {startEntry !== null && (
-          <p className="text-xs text-gray-400 italic">{startEntry.content}</p>
+          <p className="text-[10px] text-gray-500 font-mono">{startEntry.content}</p>
         )}
 
         {retries.length > 0 && (
-          <ul className="space-y-2">
+          <ul className="space-y-1">
             {retries.map((retry) => (
-              <li key={retry.index} className="rounded border border-gray-700 bg-gray-800 px-3 py-2">
-                <p className="text-xs font-medium text-gray-300 mb-1">
-                  リトライ {retry.index}:
-                </p>
-                <p className="text-xs text-gray-400 font-mono break-all">
-                  エラー: {retry.content}
+              <li key={retry.index} className="rounded border border-gray-800 bg-gray-950/50 px-2 py-1.5">
+                <p className="text-[10px] font-mono text-gray-400">
+                  <span className="text-yellow-500">retry {retry.index}</span> {retry.content}
                 </p>
               </li>
             ))}
@@ -87,16 +84,16 @@ export function DebugLog({ agentLog }: DebugLogProps) {
         )}
 
         {completeEntry !== null && (
-          <div className="rounded border border-green-700 bg-green-950 px-3 py-2">
-            <p className="text-xs text-green-400 font-medium">
+          <div className="rounded border border-green-900 bg-green-950/30 px-2 py-1.5">
+            <p className="text-[10px] text-green-400 font-mono">
               {completeEntry.content}
             </p>
           </div>
         )}
 
         {errorEntry !== null && (
-          <div className="rounded border border-red-700 bg-red-950 px-3 py-2">
-            <p className="text-xs text-red-400 font-medium">
+          <div className="rounded border border-red-900 bg-red-950/30 px-2 py-1.5">
+            <p className="text-[10px] text-red-400 font-mono">
               {errorEntry.content}
             </p>
           </div>

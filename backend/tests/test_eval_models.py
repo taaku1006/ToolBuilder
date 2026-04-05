@@ -31,8 +31,8 @@ class TestArchitectureConfig:
     def test_default_baseline(self) -> None:
         cfg = ArchitectureConfig(id="v1_baseline")
         assert cfg.id == "v1_baseline"
-        assert cfg.phases == ["A", "B", "P", "C", "D", "F", "G", "E"]
-        assert cfg.model == "gpt-4o"
+        assert cfg.phases == ["U", "G", "VF", "L"]
+        assert cfg.model == ""
         assert cfg.debug_retry_limit == 3
         assert cfg.temperature == 0.2
         assert cfg.description == ""
@@ -72,10 +72,11 @@ class TestArchitectureConfig:
         """to_settings_overrides returns a dict that can patch Settings."""
         cfg = ArchitectureConfig(id="v1_baseline")
         overrides = cfg.to_settings_overrides()
-        assert overrides["reflection_enabled"] is True
-        assert overrides["debug_loop_enabled"] is True
-        assert overrides["skills_enabled"] is True
-        assert overrides["openai_model"] == "gpt-4o"
+        # Default v2 phases ["U", "G", "VF", "L"] → no legacy A/B/D/E/F
+        assert overrides["reflection_enabled"] is False
+        assert overrides["debug_loop_enabled"] is False
+        assert overrides["skills_enabled"] is False
+        assert overrides["llm_model"] == ""
         assert overrides["debug_retry_limit"] == 3
 
     def test_to_settings_overrides_no_reflection(self) -> None:
