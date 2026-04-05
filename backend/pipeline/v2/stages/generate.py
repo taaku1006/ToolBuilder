@@ -138,17 +138,35 @@ async def generate_complex(
         )
         return
 
-    # Limit step count to avoid timeout
+    # Limit step count and ensure final step writes output
     if len(steps) > MAX_COMPLEX_STEPS:
         logger.warning(
             "COMPLEX: truncating %d steps to %d", len(steps), MAX_COMPLEX_STEPS
         )
-        steps = steps[:MAX_COMPLEX_STEPS]
+        # Keep first N-1 steps + replace last with output step
+        steps = list(steps[:MAX_COMPLEX_STEPS - 1])
+        steps.append(StrategyStep(
+            id=MAX_COMPLEX_STEPS,
+            action="Combine all results and save to OUTPUT_DIR as Excel file with all required sheets",
+            verify="print output file path and confirm file exists",
+            expected_in_output=["OUTPUT_DIR", ".xlsx"],
+        ))
         yield AgentLogEntry(
             phase="G", action="info",
-            content=f"ステップ数を {MAX_COMPLEX_STEPS} に制限しました",
+            content=f"ステップ数を {MAX_COMPLEX_STEPS} に制限 (最終ステップ=Excel書き出し)",
             timestamp=_now_iso(),
         )
+    else:
+        # Even without truncation, ensure last step mentions output
+        last = steps[-1]
+        if "save" not in last.action.lower() and "output" not in last.action.lower() and "write" not in last.action.lower():
+            steps = list(steps)
+            steps.append(StrategyStep(
+                id=len(steps) + 1,
+                action="Save all results to OUTPUT_DIR as Excel file",
+                verify="print output file path and confirm file exists",
+                expected_in_output=["OUTPUT_DIR", ".xlsx"],
+            ))
 
     accumulated_code_parts: list[str] = []
     step_max_retries = 2  # Reduced from 3 to limit total time
