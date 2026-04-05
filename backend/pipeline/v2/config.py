@@ -1,7 +1,7 @@
 """Adaptive Pipeline v2 stage configuration.
 
-Per-stage model, temperature, and max_tokens settings.
-Analogous to Auto-Claude's AGENT_CONFIGS.
+Per-stage model, temperature, max_tokens, and thinking_tokens settings.
+Analogous to Auto-Claude's AGENT_CONFIGS + phase_config.
 """
 
 from __future__ import annotations
@@ -14,31 +14,37 @@ STAGE_CONFIGS: dict[str, dict] = {
         "model": "gpt-4o-mini",
         "temperature": 0.1,
         "max_tokens": 3000,
+        "thinking_tokens": 0,
     },
     "strategize": {
         "model": "gpt-4o-mini",
         "temperature": 0.2,
         "max_tokens": 2000,
+        "thinking_tokens": 0,
     },
     "generate": {
         "model": "gpt-4o",
         "temperature": 0.3,
         "max_tokens": 8000,
+        "thinking_tokens": 0,
     },
     "generate_step": {
         "model": "gpt-4o",
         "temperature": 0.3,
         "max_tokens": 4000,
+        "thinking_tokens": 0,
     },
     "verify_llm": {
         "model": "gpt-4o-mini",
         "temperature": 0.0,
         "max_tokens": 2000,
+        "thinking_tokens": 0,
     },
     "fix": {
         "model": "gpt-4o",
         "temperature": 0.2,
         "max_tokens": 8000,
+        "thinking_tokens": 0,
     },
 }
 
@@ -50,6 +56,7 @@ class V2Settings:
     stage_models: dict[str, str] = field(default_factory=lambda: {
         k: v["model"] for k, v in STAGE_CONFIGS.items()
     })
+    stage_thinking: dict[str, int] = field(default_factory=dict)
     max_attempts: dict[str, int] = field(default_factory=lambda: {
         "simple": 2,
         "standard": 4,
@@ -67,6 +74,8 @@ class V2Settings:
         kwargs: dict = {}
         if "stage_models" in data:
             kwargs["stage_models"] = data["stage_models"]
+        if "stage_thinking" in data:
+            kwargs["stage_thinking"] = data["stage_thinking"]
         if "max_attempts" in data:
             kwargs["max_attempts"] = data["max_attempts"]
         for key in ("max_replan", "quality_threshold", "semantic_threshold",
@@ -76,8 +85,10 @@ class V2Settings:
         return cls(**kwargs)
 
     def get_stage_config(self, stage: str) -> dict:
-        """Return merged config for a stage: model from stage_models, rest from STAGE_CONFIGS."""
+        """Return merged config for a stage: model + thinking from overrides, rest from STAGE_CONFIGS."""
         base = dict(STAGE_CONFIGS.get(stage, {}))
         if stage in self.stage_models:
             base["model"] = self.stage_models[stage]
+        if stage in self.stage_thinking:
+            base["thinking_tokens"] = self.stage_thinking[stage]
         return base

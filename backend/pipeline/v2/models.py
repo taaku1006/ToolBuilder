@@ -152,6 +152,18 @@ class MemoryContext:
     gotchas: list[dict] = field(default_factory=list)
     strategy_stats: dict[str, dict] = field(default_factory=dict)
 
+    def to_checklist(self) -> str:
+        """Generate a pre-implementation checklist from gotchas (sorted by confidence)."""
+        if not self.gotchas:
+            return ""
+        sorted_gotchas = sorted(self.gotchas, key=lambda g: g.get("confidence", 0), reverse=True)
+        lines = ["## 事前チェックリスト (以下を必ず守ること)"]
+        for g in sorted_gotchas[:10]:
+            fix = g.get("fix", "")
+            confidence = g.get("confidence", 0)
+            lines.append(f"- [ ] {fix} (confidence: {confidence:.1f})")
+        return "\n".join(lines)
+
     def to_prompt(self) -> str:
         if not self.patterns and not self.gotchas and not self.strategy_stats:
             return ""

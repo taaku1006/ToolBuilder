@@ -215,3 +215,54 @@ def _derive_fix_hint(error_category: str, error_message: str) -> str:
     """
     key = _derive_gotcha_key(error_category, error_message)
     return _FIX_HINTS.get(key, _FIX_HINTS.get(error_category, f"エラーカテゴリ '{error_category}' を回避するアプローチを使うこと。"))
+
+
+# ---------------------------------------------------------------------------
+# Session insight extraction (cross-session learning)
+# ---------------------------------------------------------------------------
+
+
+def _extract_insights(
+    *,
+    attempts: list,
+    task_type: str,
+    strategy: str,
+    passed: bool,
+    replan_count: int,
+) -> list[dict]:
+    """Extract structured insights from attempt history.
+
+    Identifies recurring error patterns and strategy failures.
+    Pure Python — no LLM calls.
+    """
+    from collections import Counter
+
+    insights: list[dict] = []
+
+    # Count error categories
+    error_counts: Counter = Counter()
+    for a in attempts:
+        if a.error_category:
+            error_counts[a.error_category] += 1
+
+    # Repeated errors → insight
+    for category, count in error_counts.items():
+        if count >= 2:
+            fix_hint = _FIX_HINTS.get(category, "")
+            insights.append({
+                "pattern": category,
+                "trigger": f"{category} が {count} 回発生",
+                "prevention": fix_hint or f"エラーカテゴリ '{category}' を回避すること",
+                "source_task_type": task_type,
+            })
+
+    # Replan occurred → initial strategy was wrong
+    if replan_count > 0 and not passed:
+        insights.append({
+            "pattern": f"strategy_failure_{strategy}",
+            "trigger": f"戦略 '{strategy}' で {replan_count} 回 replan が発生",
+            "prevention": f"タスクタイプ '{task_type}' では '{strategy}' 以外の戦略を検討すること",
+            "source_task_type": task_type,
+        })
+
+    return insights

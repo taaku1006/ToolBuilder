@@ -119,6 +119,38 @@ class MemoryStore:
         self._save_json("session_log.json", log)
 
     # ------------------------------------------------------------------
+    # Insights (structured session learnings)
+    # ------------------------------------------------------------------
+
+    def load_insights(self) -> list[dict]:
+        return self._load_json("insights.json", default=[])
+
+    def save_insight(
+        self,
+        *,
+        pattern: str,
+        trigger: str,
+        prevention: str,
+        source_task_type: str,
+    ) -> None:
+        insights = self.load_insights()
+        existing = next((i for i in insights if i["pattern"] == pattern), None)
+        if existing:
+            existing["occurrences"] = existing.get("occurrences", 0) + 1
+            existing["confidence"] = min(0.5 + existing["occurrences"] * 0.1, 0.99)
+        else:
+            insights.append({
+                "pattern": pattern,
+                "trigger": trigger,
+                "prevention": prevention,
+                "source_task_type": source_task_type,
+                "occurrences": 1,
+                "confidence": 0.6,
+                "created_at": _now_iso(),
+            })
+        self._save_json("insights.json", insights)
+
+    # ------------------------------------------------------------------
     # Strategy statistics (meta-learning)
     # ------------------------------------------------------------------
 

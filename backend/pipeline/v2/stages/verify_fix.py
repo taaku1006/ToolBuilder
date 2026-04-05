@@ -289,6 +289,26 @@ async def fix(
 # ---------------------------------------------------------------------------
 
 
+def _assess_risk(state: PipelineState, v2_settings: V2Settings) -> tuple[int, bool]:
+    """Assess verification risk and return (adjusted_max_attempts, force_level3).
+
+    Higher risk → more attempts + force LLM semantic check.
+    Lower risk + simple → fewer attempts.
+    """
+    complexity = state.classification.complexity
+    base = v2_settings.max_attempts.get(complexity, 4)
+    risk_score = len(state.strategy.risk_factors)
+
+    if complexity == "complex":
+        risk_score += 2
+
+    if risk_score >= 3:
+        return (base + 2, True)
+    if risk_score == 0 and complexity == "simple":
+        return (max(1, base - 1), False)
+    return (base, False)
+
+
 def _find_best_output(output_files: list[str], expected_path: str) -> str | None:
     """Find the output file that best matches the expected file."""
     if not output_files:
