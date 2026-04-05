@@ -16,7 +16,7 @@ from core.config import Settings
 from core.deps import get_settings
 from schemas.generate import AgentLogEntry as AgentLogEntrySchema
 from schemas.generate import GenerateRequest, GenerateResponse
-from infra.openai_client import LLMClient
+from infra.openai_client import OpenAIClient as LLMClient
 from infra.prompt_builder import SYSTEM_PROMPT, build_user_prompt
 from excel.xlsx_parser import SheetInfo, build_file_context, parse_file
 from pipeline.v2 import orchestrate_v2
