@@ -69,15 +69,24 @@ async def verify_fix_loop(
         exec_result = execute_code(code, file_id=state.file_id)
 
         # ── VERIFY ──
-        verification = await verify(
-            exec_result=exec_result,
-            expected_file_path=state.expected_file_path,
-            task=state.task,
-            v2_settings=v2_settings,
-            openai_client=openai_client,
-            settings=settings,
-            force_level3=force_level3,
-        )
+        try:
+            verification = await verify(
+                exec_result=exec_result,
+                expected_file_path=state.expected_file_path,
+                task=state.task,
+                v2_settings=v2_settings,
+                openai_client=openai_client,
+                settings=settings,
+                force_level3=force_level3,
+            )
+        except Exception as exc:
+            logger.warning("VF verify failed: %s", exc)
+            yield AgentLogEntry(
+                phase="VF", action="error",
+                content=f"検証エラー: {str(exc)[:100]}",
+                timestamp=_now_iso(),
+            )
+            break
 
         # Track best
         if verification.combined_score > best_score:
@@ -117,13 +126,22 @@ async def verify_fix_loop(
                 content=f"修正 (attempt {attempt_num + 1})",
                 timestamp=_now_iso(),
             )
-            code = await fix(
-                code=code,
-                fix_request=decision.fix_request,
-                state=state,
-                openai_client=openai_client,
-                settings=settings,
-            )
+            try:
+                code = await fix(
+                    code=code,
+                    fix_request=decision.fix_request,
+                    state=state,
+                    openai_client=openai_client,
+                    settings=settings,
+                )
+            except Exception as exc:
+                logger.warning("VF fix failed: %s", exc)
+                yield AgentLogEntry(
+                    phase="VF", action="error",
+                    content=f"修正LLMエラー: {str(exc)[:100]}",
+                    timestamp=_now_iso(),
+                )
+                break
 
         elif decision.action == "replan":
             yield AgentLogEntry(
