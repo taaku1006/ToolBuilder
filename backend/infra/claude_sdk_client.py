@@ -147,27 +147,24 @@ class ClaudeSDKClient:
     ) -> str:
         """Call Claude Agent SDK and collect response text.
 
-        Uses async client internally but exposes sync interface
-        to match LLMClient.
+        Always runs in a separate thread with a fresh event loop to avoid
+        conflicts with uvicorn's running loop.
         """
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # Already in async context — use nest_asyncio or thread
-                import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor() as pool:
-                    return pool.submit(
-                        asyncio.run,
-                        self._call_sdk_async(messages, model=model, temperature=temperature, max_tokens=max_tokens),
-                    ).result()
-            else:
-                return loop.run_until_complete(
-                    self._call_sdk_async(messages, model=model, temperature=temperature, max_tokens=max_tokens)
-                )
-        except RuntimeError:
+        import concurrent.futures
+
+        def _run_in_thread():
             return asyncio.run(
-                self._call_sdk_async(messages, model=model, temperature=temperature, max_tokens=max_tokens)
+                self._call_sdk_async(
+                    messages,
+                    model=model,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
             )
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(_run_in_thread)
+            return future.result(timeout=300)  # 5 min timeout
 
     async def _call_sdk_async(
         self,
