@@ -1,1 +1,22 @@
-[]
+[
+  {
+    "task_type": "general",
+    "complexity": "standard",
+    "strategy": "pandas",
+    "attempts": 3,
+    "replan_count": 3,
+    "final_score": 0.0,
+    "passed": false,
+    "timestamp": "2026-04-04T11:18:38.746441+00:00"
+  },
+  {
+    "task_type": "multi_step",
+    "complexity": "complex",
+    "strategy": "openpyxl",
+    "attempts": 0,
+    "replan_count": 0,
+    "final_score": 1.0,
+    "passed": true,
+    "timestamp": "2026-04-04T11:50:39.346314+00:00"
+  }
+]

@@ -26,6 +26,8 @@
 - 過去の失敗アプローチとは異なる方法を使ってください
 - 入力ファイルパスは環境変数 INPUT_FILE から取得してください
 - 出力ファイルは環境変数 OUTPUT_DIR のディレクトリに保存してください
+- pandas, openpyxl, xlsxwriter, numpy が使用可能です（プリインストール済み）
+- 絶対に pip install や !pip install をコードに含めないでください（SyntaxError の原因になります）
 - 処理結果のサマリーをprintで出力してください
 
 修正後の完全なPythonコードのみを出力してください。

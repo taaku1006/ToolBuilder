@@ -1,1 +1,32 @@
-{}
+{
+  "multi_step_openpyxl": {
+    "file_features": [
+      "merged_cells",
+      "multi_sheet",
+      "nested_headers"
+    ],
+    "task_type": "multi_step",
+    "winning_strategy": {
+      "approach": "openpyxl",
+      "key_functions": [
+        "load_workbook",
+        "create_sheet",
+        "cell.value",
+        "sum",
+        "average",
+        "count",
+        "if",
+        "sort",
+        "copy"
+      ],
+      "preprocessing": [
+        "データの整形とフラット化",
+        "必要な列の抽出",
+        "計算用の変数の初期化"
+      ]
+    },
+    "quality_score": 1.0,
+    "occurrences": 1,
+    "last_used": "2026-04-04T11:50:39.346068+00:00"
+  }
+}
