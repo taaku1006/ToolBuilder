@@ -63,12 +63,12 @@ export function FileUpload() {
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         className={[
-          'flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed px-6 py-10 transition-colors',
+          'flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-6 transition-colors',
           loading
-            ? 'cursor-not-allowed border-gray-700 bg-gray-900 opacity-60'
+            ? 'cursor-not-allowed border-gray-800 bg-gray-950 opacity-60'
             : isDragging
-              ? 'border-blue-500 bg-blue-950/30 cursor-pointer'
-              : 'border-gray-600 bg-gray-900 hover:border-gray-400 cursor-pointer',
+              ? 'border-blue-500 bg-blue-950/20 cursor-pointer'
+              : 'border-gray-700 bg-gray-900/50 hover:border-gray-600 cursor-pointer',
         ].join(' ')}
       >
         <input
@@ -100,8 +100,8 @@ export function FileUpload() {
                 d="M5 13l4 4L19 7"
               />
             </svg>
-            <p className="text-sm font-medium text-gray-200">{file?.name}</p>
-            <p className="text-xs text-gray-500">クリックまたはドロップで差し替え</p>
+            <p className="text-xs font-medium font-mono text-gray-300">{file?.name}</p>
+            <p className="text-[10px] text-gray-600">Drop or click to replace</p>
           </>
         ) : (
           <>
@@ -118,11 +118,11 @@ export function FileUpload() {
                 d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
               />
             </svg>
-            <p className="text-sm text-gray-300">
-              クリックまたはドロップしてファイルを選択
+            <p className="text-xs text-gray-400">
+              Drop file or click to browse
             </p>
-            <p className="text-xs text-gray-500">
-              対応形式: xlsx / xls / csv &nbsp;|&nbsp; 最大 50MB
+            <p className="text-[10px] text-gray-600 font-mono">
+              .xlsx .xls .csv | max 50MB
             </p>
           </>
         )}
@@ -131,7 +131,7 @@ export function FileUpload() {
       {displayError && (
         <div
           role="alert"
-          className="mt-2 rounded-md bg-red-950 border border-red-800 px-4 py-2 text-sm text-red-300"
+          className="mt-1.5 rounded bg-red-950/50 border border-red-900 px-3 py-1.5 text-xs text-red-300 font-mono"
         >
           {displayError}
         </div>
