@@ -1,59 +1,64 @@
 # ToolBuilder
 
-自然言語の指示から Excel/CSV 処理用の Python コードを自動生成・実行する AI ツールビルダー。
+AI-powered code generation for Excel/CSV processing. Describe what you want in natural language, and ToolBuilder generates, executes, and self-repairs Python code automatically.
 
-## 概要
+## Overview
 
-ToolBuilder は、ユーザーが Excel ファイルをアップロードし、やりたい処理を日本語で記述するだけで、Python コードの生成・サンドボックス実行・自動デバッグまでを一貫して行う Web アプリケーションです。
+Upload an Excel/CSV file, describe the task, and ToolBuilder handles the rest: file analysis, code generation, sandboxed execution, automatic debugging, and cross-session learning.
 
-### 主な機能
+### Key Features
 
-- **自然言語→コード生成**: タスク記述から Python コードを自動生成
-- **多段パイプライン**: 探索(A)→分析(B)→生成(C)→デバッグ(D)→保存(E) の段階的処理
-- **自己修復ループ**: 実行エラー時に自動でコードを修正・リトライ
-- **スキル機能**: 成功したコードを再利用可能なスキルとして保存・提案
-- **Eval ハーネス**: アーキテクチャ比較のための A/B テスト基盤
-- **MagenticOne 統合**: Microsoft のマルチエージェントフレームワークによる代替オーケストレーション
+- **Natural language to code**: Describe tasks in any language, get working Python
+- **Adaptive Pipeline v2**: 4-stage architecture (Understand → Generate → Verify-Fix → Learn)
+- **Self-healing loop**: Automatic error detection, recovery analysis, and code repair
+- **Cross-session memory**: Learns from past successes/failures (patterns, gotchas, insights)
+- **Multi-LLM support**: OpenAI, Anthropic, Google Gemini, Ollama (local), Claude SDK (subscription)
+- **Eval harness**: A/B test different models and configurations
 
-## 技術スタック
+## Tech Stack
 
-| レイヤー | 技術 |
-|----------|------|
+| Layer | Technology |
+|-------|-----------|
 | Backend | FastAPI, Python 3.13+, SQLAlchemy (async), SQLite |
 | Frontend | React 19, TypeScript, Vite, Tailwind CSS v4, Zustand |
-| AI/LLM | OpenAI API (gpt-4o) |
+| LLM | LiteLLM (OpenAI/Anthropic/Gemini/Ollama) + Claude Agent SDK |
 | Infra | Docker Compose, nginx, Langfuse (optional) |
 
-## クイックスタート
+## Quick Start
 
-### 前提条件
+### Prerequisites
 
 - Docker & Docker Compose
-- OpenAI API キー
+- At least one of: OpenAI API key, Anthropic API key, Ollama, or Claude Code OAuth token
 
-### セットアップ
+### Setup
 
 ```bash
-# 1. .env を作成
+# 1. Create .env
 cp backend/.env.example backend/.env
-# backend/.env の OPENAI_API_KEY を設定
+# Edit backend/.env — set at least one LLM provider:
+#   OPENAI_API_KEY=sk-...              (OpenAI)
+#   ANTHROPIC_API_KEY=sk-ant-api...    (Anthropic API)
+#   GEMINI_API_KEY=...                 (Google Gemini)
+#   CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-...  (Claude subscription)
+#   LLM_MODEL=ollama/gemma4:e4b       (Ollama — no key needed)
 
-# 2. 起動
-docker-compose up --build
+# 2. Start
+docker compose up --build
 
-# 3. アクセス
-# http://localhost (nginx経由)
-# http://localhost:5173 (フロントエンド直接)
-# http://localhost:8000 (バックエンド直接)
+# 3. Access
+# http://localhost        (nginx)
+# http://localhost:5173   (frontend)
+# http://localhost:8000   (backend API)
 ```
 
-### ローカル開発
+### Local Development
 
 ```bash
 # Backend
 cd backend
 uv sync
-uvicorn main:app --reload --port 8000
+uv run uvicorn main:app --reload --port 8000
 
 # Frontend
 cd frontend
@@ -61,100 +66,133 @@ npm install
 npm run dev
 ```
 
-## 環境変数
+## Environment Variables
 
-`backend/.env` で設定します（`backend/.env.example` を参照）。
+Set in `backend/.env` (see `backend/.env.example`).
 
-| 変数名 | 必須 | 説明 |
-|--------|------|------|
-| `OPENAI_API_KEY` | Yes | OpenAI API キー |
-| `OPENAI_MODEL` | No | 使用モデル（デフォルト: `gpt-4o`） |
-| `DATABASE_URL` | No | DB 接続文字列 |
-| `EXEC_TIMEOUT` | No | コード実行タイムアウト秒数（デフォルト: 30） |
-| `DEBUG_RETRY_LIMIT` | No | デバッグリトライ上限（デフォルト: 3） |
-| `SKILLS_ENABLED` | No | スキル機能の有効化 |
-| `LANGFUSE_ENABLED` | No | Langfuse トレーシングの有効化 |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `OPENAI_API_KEY` | One of these | OpenAI API key |
+| `ANTHROPIC_API_KEY` | | Anthropic API key |
+| `GEMINI_API_KEY` | | Google Gemini API key |
+| `CLAUDE_CODE_OAUTH_TOKEN` | | Claude subscription OAuth token |
+| `LLM_MODEL` | No | Default model (e.g., `gpt-4o`, `ollama/gemma4:e4b`) |
+| `LLM_BASE_URL` | No | Custom LLM endpoint |
+| `DATABASE_URL` | No | DB connection string |
+| `EXEC_TIMEOUT` | No | Code execution timeout in seconds (default: 30) |
+| `LANGFUSE_ENABLED` | No | Enable Langfuse tracing |
 
-## アーキテクチャ
+## Architecture
 
-### パイプライン
+### Adaptive Pipeline v2
 
 ```
-Upload → Phase A (探索) → Phase B (分析) → Phase C (コード生成)
-                                                ↓
-         Phase E (スキル保存) ← Phase D (デバッグループ)
-                                                ↓ (eval時)
-                                  Phase F/G (品質評価ループ)
+Upload → UNDERSTAND (Python analysis + LLM strategy)
+              ↓
+         GENERATE (complexity-adaptive code generation)
+              ↓
+    ┌── VERIFY-FIX LOOP ──┐
+    │  Verifier → RecoveryManager → Fixer  │
+    │  (replan on stuck)                    │
+    └──────────────────────┘
+              ↓
+         LEARN (patterns / gotchas / insights → memory)
 ```
 
-### プロジェクト構成
+- **UNDERSTAND**: LLM-free file analysis + LLM strategy planning
+- **GENERATE**: SIMPLE (1 call) / STANDARD (+ memory) / COMPLEX (step-by-step)
+- **VERIFY-FIX**: Unified loop replacing Phase D/F/G. Judge/Fixer separation, stuck detection, replan
+- **LEARN**: Cross-session memory (patterns.json, gotchas.json, insights.json)
+
+### Multi-LLM Provider Routing
+
+```
+Model string → client_factory.py → appropriate backend
+
+"gpt-4o"                    → LiteLLM (OpenAI)
+"anthropic/claude-sonnet-4-6" → LiteLLM (Anthropic API)
+"ollama/gemma4:e4b"         → LiteLLM (Ollama local)
+"claude-sdk/claude-sonnet-4-6" → Claude Agent SDK (subscription)
+```
+
+### Project Structure
 
 ```
 ToolBuilder/
 ├── backend/
-│   ├── core/          # 設定、依存性注入、例外処理
-│   ├── db/            # SQLAlchemy モデル・エンジン
-│   ├── routers/       # API エンドポイント
-│   ├── pipeline/      # オーケストレーション・各フェーズ処理
-│   │   └── magentic_one/  # MagenticOne マルチエージェント
-│   ├── infra/         # OpenAI クライアント、サンドボックス、プロンプト管理
-│   ├── eval/          # Eval ハーネス（テストケース・アーキテクチャ定義）
-│   ├── prompts/       # LLM プロンプトテンプレート
-│   └── tests/         # テスト
+│   ├── core/              # Settings, deps, exceptions
+│   ├── db/                # SQLAlchemy models & engine
+│   ├── routers/           # API endpoints (generate, upload, eval, models)
+│   ├── pipeline/
+│   │   ├── v2/            # Adaptive Pipeline v2
+│   │   │   ├── orchestrator.py    # Main 4-stage orchestrator
+│   │   │   ├── stages/            # understand, generate, verify_fix, recovery, learn
+│   │   │   ├── models.py          # Data models (PipelineState, Strategy, etc.)
+│   │   │   └── config.py          # STAGE_CONFIGS, V2Settings
+│   │   └── magentic_one/          # MagenticOne alternative
+│   ├── infra/
+│   │   ├── llm_client.py          # LiteLLM backend
+│   │   ├── claude_sdk_client.py   # Claude Agent SDK backend
+│   │   ├── client_factory.py      # Provider routing
+│   │   └── sandbox.py             # Code execution sandbox
+│   ├── memory/            # Cross-session learning (JSON-based)
+│   ├── eval/              # Eval harness (architectures, runner, results)
+│   ├── prompts/           # LLM prompt templates
+│   └── tests/             # pytest test suite
 ├── frontend/
 │   └── src/
-│       ├── components/    # UI コンポーネント
-│       ├── api/           # API クライアント
-│       ├── stores/        # Zustand ストア
-│       └── hooks/         # カスタムフック
+│       ├── components/    # UI (dashboard style)
+│       ├── api/           # API client
+│       ├── stores/        # Zustand stores
+│       └── hooks/         # Custom hooks
 ├── docker-compose.yml
 └── nginx.conf
 ```
 
-## API エンドポイント
+## API Endpoints
 
-### ファイル操作
+### File Operations
 
-| メソッド | パス | 説明 |
-|----------|------|------|
-| POST | `/api/upload` | ファイルアップロード・パース |
-| GET | `/api/download/{path}` | 生成ファイルのダウンロード |
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/upload` | Upload & parse file |
+| GET | `/api/download/{path}` | Download generated file |
 
-### コード生成・実行
+### Code Generation & Execution
 
-| メソッド | パス | 説明 |
-|----------|------|------|
-| POST | `/api/generate` | コード生成（SSE / JSON） |
-| POST | `/api/execute` | サンドボックスでコード実行 |
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/generate` | Generate code (SSE / JSON) |
+| POST | `/api/execute` | Execute code in sandbox |
+| GET | `/api/models` | List available LLM models |
 
-### 履歴・スキル
+### History & Skills
 
-| メソッド | パス | 説明 |
-|----------|------|------|
-| GET | `/api/history` | 実行履歴一覧 |
-| GET/POST/DELETE | `/api/skills` | スキル CRUD |
-| POST | `/api/skills/{id}/run` | スキル実行 |
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/history` | Execution history |
+| GET/POST/DELETE | `/api/skills` | Skills CRUD |
+| POST | `/api/skills/{id}/run` | Run a skill |
 
 ### Eval
 
-| メソッド | パス | 説明 |
-|----------|------|------|
-| GET | `/eval/architectures` | アーキテクチャ一覧 |
-| POST | `/eval/run` | Eval 実行開始 |
-| GET | `/eval/run/{id}/stream` | 進捗 SSE ストリーム |
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/eval/architectures` | List architectures |
+| POST | `/api/eval/run` | Start eval run |
+| GET | `/api/eval/run/{id}` | Run status & results |
 
-## テスト
+## Testing
 
 ```bash
-# Backend
-cd backend
-pytest
+# Backend (in Docker)
+docker compose exec backend uv run pytest tests/
 
 # Frontend
 cd frontend
 npm test
 ```
 
-## ライセンス
+## License
 
 Private
