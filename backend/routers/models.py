@@ -54,7 +54,7 @@ def _available_models(settings: Settings) -> list[ModelInfo]:
             continue
         if provider == "google" and not settings.gemini_api_key:
             continue
-        if provider == "claude-sdk" and not settings.claude_oauth_token:
+        if provider == "claude-sdk" and not settings.claude_code_oauth_token:
             continue
         # Ollama is always available (local)
         result.append(

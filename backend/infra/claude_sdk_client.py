@@ -43,7 +43,7 @@ class ClaudeSDKClient:
     def __init__(self, settings: Settings) -> None:
         self._model = _strip_prefix(settings.active_model)
         self._oauth_token = (
-            getattr(settings, "claude_oauth_token", "")
+            getattr(settings, "claude_code_oauth_token", "")
             or os.environ.get("CLAUDE_CODE_OAUTH_TOKEN", "")
         )
 
