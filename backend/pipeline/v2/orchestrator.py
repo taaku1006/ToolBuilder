@@ -44,11 +44,20 @@ async def orchestrate_v2(
     # Load v2-specific settings from architecture config if available
     v2_settings = V2Settings.from_dict(v2_config) if v2_config else V2Settings()
 
-    # Apply stage model overrides to STAGE_CONFIGS so all stages pick them up
+    # Apply stage model overrides to STAGE_CONFIGS so all stages pick them up.
+    # If no per-stage overrides but a global model is set (via Settings.active_model),
+    # apply it to ALL stages so the architecture's top-level model is respected.
     from pipeline.v2.config import STAGE_CONFIGS
-    for stage, model in v2_settings.stage_models.items():
-        if stage in STAGE_CONFIGS:
-            STAGE_CONFIGS[stage]["model"] = model
+    global_model = settings.active_model  # from arch.model → Settings.llm_model
+    has_stage_overrides = "stage_models" in (v2_config or {})
+
+    if has_stage_overrides:
+        for stage, model in v2_settings.stage_models.items():
+            if stage in STAGE_CONFIGS:
+                STAGE_CONFIGS[stage]["model"] = model
+    elif global_model:
+        for stage in STAGE_CONFIGS:
+            STAGE_CONFIGS[stage]["model"] = global_model
 
     openai_client = OpenAIClient(settings)
 
@@ -247,9 +256,19 @@ def _recall_memory(file_context) -> MemoryContext:
     if not data_dir.exists():
         return MemoryContext()
 
+    store = MemoryStore(data_dir)
     feature_keys = file_context.get_feature_keys()
     patterns = search_patterns(data_dir, file_features=feature_keys)
     gotchas = search_gotchas(data_dir, file_features=feature_keys)
-    strategy_stats = MemoryStore(data_dir).get_strategy_stats()
+    strategy_stats = store.get_strategy_stats()
+
+    # Merge insights into gotchas so they appear in checklist and prompts
+    for insight in store.load_insights():
+        gotchas.append({
+            "_key": insight.get("pattern", ""),
+            "detection": insight.get("trigger", ""),
+            "fix": insight.get("prevention", ""),
+            "confidence": insight.get("confidence", 0.5),
+        })
 
     return MemoryContext(patterns=patterns, gotchas=gotchas, strategy_stats=strategy_stats)
